@@ -1,0 +1,24 @@
+{
+  "name": "aquasentinel",
+  "version": "1.0.0",
+  "description": "AquaSentinel - IoT Water Quality Monitoring & Gemini Fish-Culture Assistant",
+  "scripts": {
+    "dev": "concurrently -n \"backend,frontend\" -c \"blue,cyan\" \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "build:frontend": "npm run build --prefix frontend",
+    "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "keywords": [
+    "aquasentinel",
+    "iot",
+    "aquaculture",
+    "gemini-api",
+    "fish-farming"
+  ],
+  "author": "",
+  "license": "MIT"
+}
