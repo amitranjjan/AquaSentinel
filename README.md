@@ -1,7 +1,7 @@
 # 🐟 AquaSentinel — Water Quality + Gemini Fish-Culture Assistant
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Author: Amit Ranjan](https://img.shields.io/badge/Owner-Amit%20Ranjan-cyan.svg)](https://github.com/)
+[![Author: Amit Ranjan](https://img.shields.io/badge/Owner-Amit%20Ranjan-cyan.svg)](https://github.com/amitranjjan)
 [![React 19](https://img.shields.io/badge/React-19-61dafb.svg?logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178c6.svg?logo=typescript)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933.svg?logo=node.js)](https://nodejs.org/)
@@ -219,7 +219,7 @@ The web application is intentionally designed to **operate in real time only whe
 ### 2. Installation
 Clone the repository and install all dependencies:
 ```bash
-git clone https://github.com/amitr/AquaSentinel.git
+git clone https://github.com/amitranjjan/AquaSentinel.git
 cd AquaSentinel
 npm run install:all
 ```
@@ -269,13 +269,13 @@ git init
 git add .
 
 # 3. Commit your changes
-git commit -m "feat: complete AquaSentinel IoT water quality & Gemini assistant system"
+git commit -m "feat: complete AquaSentinel IoT water quality & Gemini assistant system by Amit Ranjan"
 
 # 4. Set the default branch to main
 git branch -M main
 
-# 5. Link your GitHub remote repository (replace with your actual GitHub URL)
-git remote add origin https://github.com/<your-username>/AquaSentinel.git
+# 5. Link your GitHub remote repository
+git remote add origin https://github.com/amitranjjan/AquaSentinel.git
 
 # 6. Push to GitHub
 git push -u origin main
