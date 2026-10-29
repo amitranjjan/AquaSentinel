@@ -11,11 +11,29 @@ export interface BLETelemetryData {
 
 let activeDevice: any = null;
 let activeCharacteristic: any = null;
-let textDecoder = new TextDecoder();
-let chunkBuffer = '';
+const textDecoder = new TextDecoder();
+let buffer = '';
 
 export function isWebBluetoothSupported(): boolean {
   return typeof navigator !== 'undefined' && 'bluetooth' in navigator;
+}
+
+function handleTelemetry(parsed: any, rawLine: string): BLETelemetryData {
+  return {
+    waterQuality: {
+      temperature: parsed.temperature !== undefined ? parsed.temperature : null,
+      ph: parsed.ph !== undefined ? parsed.ph : null,
+      turbidity: parsed.turbidity !== undefined ? parsed.turbidity : null
+    },
+    status: {
+      temperature: parsed.temperatureStatus || 'NORMAL',
+      ph: parsed.phStatus || 'NORMAL',
+      turbidity: parsed.turbidityStatus || 'NORMAL',
+      overall: parsed.overallStatus || 'NORMAL',
+      buzzer: Boolean(parsed.buzzer)
+    },
+    rawJson: rawLine
+  };
 }
 
 export async function requestAndConnectBLE(
@@ -29,20 +47,20 @@ export async function requestAndConnectBLE(
 
   try {
     const navAny = navigator as any;
+    
+    // 1. Match the HM-10 by service instead of name
     const device = await navAny.bluetooth.requestDevice({
-      filters: [
-        { namePrefix: 'AquaSentinel' },
-        { name: 'AquaSentinel-ESP32' }
-      ],
-      optionalServices: [BLE_SERVICE_UUID]
+      filters: [{ services: [BLE_SERVICE_UUID] }]
     });
 
     activeDevice = device;
+    buffer = ''; // Reset buffer on new connection
 
     device.addEventListener('gattserverdisconnected', () => {
       console.warn('[BLE] Device disconnected');
       activeDevice = null;
       activeCharacteristic = null;
+      buffer = '';
       onDisconnect();
     });
 
@@ -60,46 +78,26 @@ export async function requestAndConnectBLE(
     await characteristic.startNotifications();
     console.log('[BLE] Notifications started.');
 
+    // 2. Join the 20-byte pieces into full lines
     characteristic.addEventListener('characteristicvaluechanged', (event: any) => {
-      const value = event.target.value;
-      const decodedChunk = textDecoder.decode(value);
-      
-      chunkBuffer += decodedChunk;
-
-      // Handle newline or closing curly bracket framed JSON
-      const startIdx = chunkBuffer.indexOf('{');
-      const endIdx = chunkBuffer.lastIndexOf('}');
-
-      if (startIdx !== -1 && endIdx > startIdx) {
-        const potentialJson = chunkBuffer.substring(startIdx, endIdx + 1);
-        try {
-          const parsed = JSON.parse(potentialJson);
-          chunkBuffer = chunkBuffer.substring(endIdx + 1);
-
-          const telemetry: BLETelemetryData = {
-            waterQuality: {
-              temperature: parsed.temperature !== undefined ? parsed.temperature : null,
-              ph: parsed.ph !== undefined ? parsed.ph : null,
-              turbidity: parsed.turbidity !== undefined ? parsed.turbidity : null
-            },
-            status: {
-              temperature: parsed.temperatureStatus || 'NORMAL',
-              ph: parsed.phStatus || 'NORMAL',
-              turbidity: parsed.turbidityStatus || 'NORMAL',
-              overall: parsed.overallStatus || 'NORMAL',
-              buzzer: Boolean(parsed.buzzer)
-            },
-            rawJson: potentialJson
-          };
-
-          onData(telemetry);
-        } catch (parseErr) {
-          // Incomplete chunk yet, keep in buffer
+      buffer += textDecoder.decode(event.target.value);
+      let i: number;
+      while ((i = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, i).trim();
+        buffer = buffer.slice(i + 1);
+        if (line) {
+          try {
+            const parsed = JSON.parse(line);
+            const telemetry = handleTelemetry(parsed, line);
+            onData(telemetry);
+          } catch (parseErr) {
+            console.warn('[BLE] Error parsing JSON telemetry line:', line, parseErr);
+          }
         }
       }
     });
 
-    return device.name || 'AquaSentinel-ESP32';
+    return device.name || 'AquaSentinel-Node';
   } catch (err: any) {
     console.error('[BLE Error]', err);
     onError(err);
@@ -113,5 +111,5 @@ export function disconnectBLE(): void {
   }
   activeDevice = null;
   activeCharacteristic = null;
-  chunkBuffer = '';
+  buffer = '';
 }

@@ -60,11 +60,16 @@ app.get("/", (req, res) => {
   `);
 });
 
-// Start Server
-app.listen(PORT, () => {
-  console.log("=================================================");
-  console.log(`🌊 AquaSentinel Server running on http://localhost:${PORT}`);
-  console.log(`🤖 Gemini Model: ${process.env.GEMINI_MODEL || "gemini-3.8-flash"}`);
-  console.log(`🔑 Gemini Key Configured: ${process.env.GEMINI_API_KEY ? "YES (Live AI Active)" : "NO (Running in Local Aquaculture Rule Mode)"}`);
-  console.log("=================================================");
-});
+// Start Server (only when not running inside Vercel serverless)
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log("=================================================");
+    console.log(`🌊 AquaSentinel Server running on http://localhost:${PORT}`);
+    console.log(`🤖 Gemini Model: ${process.env.GEMINI_MODEL || "gemini-3.8-flash"}`);
+    console.log(`🔑 Gemini Key Configured: ${process.env.GEMINI_API_KEY ? "YES (Live AI Active)" : "NO (Running in Local Aquaculture Rule Mode)"}`);
+    console.log("=================================================");
+  });
+}
+
+export default app;
+

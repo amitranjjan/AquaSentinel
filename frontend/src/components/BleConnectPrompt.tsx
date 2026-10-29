@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bluetooth, AlertCircle, WifiOff, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Bluetooth, AlertCircle, WifiOff, Sparkles } from 'lucide-react';
 import { isWebBluetoothSupported } from '../services/bleService';
 
 interface BleConnectPromptProps {
@@ -36,7 +36,7 @@ export const BleConnectPrompt: React.FC<BleConnectPromptProps> = ({
             AquaSentinel Node Required
           </h2>
           <p className="mt-2 text-sm text-slate-300 leading-relaxed max-w-lg mx-auto">
-            The web dashboard operates in real time <span className="text-cyan-400 font-semibold">only when connected to the AquaSentinel ESP32 hardware via Bluetooth Low Energy (BLE)</span>.
+            The web dashboard operates in real time <span className="text-cyan-400 font-semibold">only when connected to your AquaSentinel sensor hardware (ESP8266 + HM-10 or ESP32) via Bluetooth Low Energy (BLE)</span>.
           </p>
         </div>
 
@@ -48,7 +48,7 @@ export const BleConnectPrompt: React.FC<BleConnectPromptProps> = ({
               Power Node
             </div>
             <p className="text-slate-400 text-[11px]">
-              Turn on your ESP32 water sensor unit near your computer.
+              Turn on your ESP8266 + HM-10 or ESP32 water sensor unit near your computer.
             </p>
           </div>
 
@@ -58,7 +58,7 @@ export const BleConnectPrompt: React.FC<BleConnectPromptProps> = ({
               Pair Device
             </div>
             <p className="text-slate-400 text-[11px]">
-              Click Connect and select <span className="font-mono text-slate-200">AquaSentinel-ESP32</span> in the browser prompt.
+              Click Connect and select your BLE device (<span className="font-mono text-slate-200">HM-10 / AT-09 / AquaSentinel</span>) in the browser prompt.
             </p>
           </div>
 
