@@ -19,18 +19,35 @@ export function isWebBluetoothSupported(): boolean {
 }
 
 function handleTelemetry(parsed: any, rawLine: string): BLETelemetryData {
+  // Support both long and short key aliases for Arduino Uno / ESP8266 / ESP32
+  const waterTemp = parsed.waterTemp !== undefined ? parsed.waterTemp : parsed.temperature;
+  const ph = parsed.ph !== undefined ? parsed.ph : null;
+  const turbidity = parsed.turbidity !== undefined ? parsed.turbidity : parsed.turb;
+  const airTemp = parsed.airTemp !== undefined ? parsed.airTemp : parsed.airTemperature;
+  const humidity = parsed.humidity !== undefined ? parsed.humidity : parsed.hum;
+  const p1 = parsed.pump1 !== undefined ? Boolean(Number(parsed.pump1)) : Boolean(Number(parsed.p1));
+  const p2 = parsed.pump2 !== undefined ? Boolean(Number(parsed.pump2)) : Boolean(Number(parsed.p2));
+
   return {
     waterQuality: {
-      temperature: parsed.temperature !== undefined ? parsed.temperature : null,
-      ph: parsed.ph !== undefined ? parsed.ph : null,
-      turbidity: parsed.turbidity !== undefined ? parsed.turbidity : null
+      temperature: waterTemp !== undefined && waterTemp !== null ? Number(waterTemp) : null,
+      ph: ph !== undefined && ph !== null ? Number(ph) : null,
+      turbidity: turbidity !== undefined && turbidity !== null ? Number(turbidity) : null,
+      airTemperature: airTemp !== undefined && airTemp !== null ? Number(airTemp) : null,
+      humidity: humidity !== undefined && humidity !== null ? Number(humidity) : null,
+      pump1: p1,
+      pump2: p2
     },
     status: {
       temperature: parsed.temperatureStatus || 'NORMAL',
       ph: parsed.phStatus || 'NORMAL',
       turbidity: parsed.turbidityStatus || 'NORMAL',
-      overall: parsed.overallStatus || 'NORMAL',
-      buzzer: Boolean(parsed.buzzer)
+      airTemperature: parsed.airTemperatureStatus || 'NORMAL',
+      humidity: parsed.humidityStatus || 'NORMAL',
+      overall: parsed.overallStatus || parsed.status || 'NORMAL',
+      buzzer: Boolean(Number(parsed.buzzer)),
+      pump1: p1,
+      pump2: p2
     },
     rawJson: rawLine
   };
@@ -48,7 +65,7 @@ export async function requestAndConnectBLE(
   try {
     const navAny = navigator as any;
     
-    // 1. Match the HM-10 by service instead of name
+    // 1. Match the HM-10 / BLE module by standard Service UUID
     const device = await navAny.bluetooth.requestDevice({
       filters: [{ services: [BLE_SERVICE_UUID] }]
     });
@@ -78,7 +95,7 @@ export async function requestAndConnectBLE(
     await characteristic.startNotifications();
     console.log('[BLE] Notifications started.');
 
-    // 2. Join the 20-byte pieces into full lines
+    // 2. Join 20-byte pieces into full lines delimited by '\n'
     characteristic.addEventListener('characteristicvaluechanged', (event: any) => {
       buffer += textDecoder.decode(event.target.value);
       let i: number;
@@ -97,11 +114,36 @@ export async function requestAndConnectBLE(
       }
     });
 
-    return device.name || 'AquaSentinel-Node';
+    return device.name || 'AquaSentinel-Arduino';
   } catch (err: any) {
     console.error('[BLE Error]', err);
     onError(err);
     throw err;
+  }
+}
+
+/**
+ * Sends a command string (e.g. "P1_ON", "P1_OFF", "P2_ON", "P2_OFF")
+ * to the Arduino Uno / Microcontroller over BLE.
+ */
+export async function sendBLECommand(cmd: string): Promise<boolean> {
+  if (!activeCharacteristic) {
+    console.warn('[BLE] Cannot send command: no active characteristic');
+    return false;
+  }
+  try {
+    const encoder = new TextEncoder();
+    const payload = encoder.encode(cmd.endsWith('\n') ? cmd : cmd + '\n');
+    if (activeCharacteristic.writeValueWithResponse) {
+      await activeCharacteristic.writeValueWithResponse(payload);
+    } else {
+      await activeCharacteristic.writeValue(payload);
+    }
+    console.log('[BLE Sent Command]:', cmd);
+    return true;
+  } catch (err) {
+    console.error('[BLE Send Command Error]', err);
+    return false;
   }
 }
 

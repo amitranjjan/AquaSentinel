@@ -39,7 +39,7 @@ export function generateLocalRuleBasedAdvice(waterQuality, status, farm) {
   // Check for sensor hardware errors
   if (!hasTemp || !hasPh || !hasTurb || status?.overall === "SENSOR_ERROR") {
     const errorSensors = [];
-    if (!hasTemp) errorSensors.push("Temperature");
+    if (!hasTemp) errorSensors.push("Water Temperature");
     if (!hasPh) errorSensors.push("pH");
     if (!hasTurb) errorSensors.push("Turbidity");
 
@@ -47,10 +47,10 @@ export function generateLocalRuleBasedAdvice(waterQuality, status, farm) {
       status: "SENSOR_ERROR",
       summary: `Sensor telemetry unavailable or hardware fault detected on: ${errorSensors.join(", ")}.`,
       whatToDoNow: [
-        `Inspect the wiring and probe connections for ${errorSensors.join(", ")}.`,
+        `Inspect the wiring and probe connections on your Arduino Uno for ${errorSensors.join(", ")}.`,
         "Do NOT add water treatment chemicals or make abrupt pond adjustments without verified readings.",
-        "Use a calibrated handheld meter or reagent test kit to verify pond parameters manually.",
-        "Ensure sensor cables are shielded from moisture intrusion and electrical noise."
+        "Ensure the 2 pumps remain in safe manual state or verified automatic circulation.",
+        "Use a calibrated handheld meter or reagent test kit to verify pond parameters manually."
       ],
       monitor: errorSensors.length > 0 ? errorSensors : ["pH", "Temperature", "Turbidity"],
       urgency: "HIGH",
@@ -125,30 +125,36 @@ export function generateLocalRuleBasedAdvice(waterQuality, status, farm) {
       summary: `Water conditions are currently optimal for ${species} (${farm?.cultureType || "Pond"}). All monitored parameters are within safe bounds.`,
       whatToDoNow: [
         "Continue routine feeding and observation according to your normal farm schedule.",
+        "Keep Pump 1 (Aerator) in auto mode or run on standard morning cycle.",
         "Perform visual check of surface water and fish swimming posture at dawn and dusk.",
         "Log readings periodically to track daily diurnal patterns."
       ],
       monitor: ["pH", "Temperature", "Turbidity"],
       urgency: "LOW",
-      reason: `Temperature (${temp}°C), pH (${ph}), and Turbidity (${turb} NTU) are comfortably seated inside ${species}'s optimal comfort envelope (${profile.tempOptimal}, pH ${profile.phOptimal}).`
+      reason: `Water Temperature (${temp}°C), pH (${ph}), and Turbidity (${turb} NTU) are comfortably seated inside ${species}'s optimal comfort envelope (${profile.tempOptimal}, pH ${profile.phOptimal}).`
     };
   }
 
   // Generate actionable steps based on detected issues
   const actions = [];
-  actions.push("Re-check current readings after 15 to 30 minutes to confirm whether values are drifting or stable.");
+  
+  // Pump specific actions
+  if (temp > 30 || turb > 55) {
+    actions.push("Turn ON Pump 1 (Aerator / Circulation Pump) to prevent oxygen depletion and thermal stratification.");
+  }
+  if (turb > 75 || ph < 6.2 || ph > 8.8) {
+    actions.push("Activate Pump 2 (Freshwater Pump) for a gradual 10-15% water exchange to flush excessive turbidity or dilute pH extremes.");
+  }
+
+  actions.push("Re-check current readings after 15 to 30 minutes to confirm whether values are drifting or stabilizing.");
   actions.push("Observe fish swimming orientation, gill movements, and check whether fish are gasping ('piping') at the water surface.");
 
   if (issues.some(i => i.param === "pH")) {
     actions.push("Avoid sudden chemical shock treatments. If pH is low, plan gradual buffering with agricultural limestone after consulting local extension standards.");
   }
-  if (issues.some(i => i.param === "Turbidity")) {
-    actions.push("Check pond inlet source for muddy runoff or erosion. Reduce active bottom disturbance or paddle aerator angle if suspended silt is rising.");
-  }
   if (issues.some(i => i.param === "Temperature")) {
     actions.push("Reduce feed rations by 20-40% if temperature is outside the preferred digestive zone to avoid water fouling.");
   }
-  actions.push("If abnormal conditions persist for more than 2 consecutive readings, consult your local aquaculture extension specialist.");
 
   return {
     status: conditionStatus,
@@ -248,40 +254,39 @@ export async function getGeminiChatReply({ message, conversationHistory = [], wa
     return {
       reply: `**AquaSentinel Advisor (Local Expert Mode)**\n\n` +
         `Current Telemetry for **${species}** (${farm?.cultureType || "Pond"}):\n` +
-        `- Temperature: **${waterQuality?.temperature ?? "N/A"} °C** (Optimal: ${profile.tempOptimal})\n` +
-        `- pH: **${waterQuality?.ph ?? "N/A"}** (Optimal: ${profile.phOptimal})\n` +
-        `- Turbidity: **${waterQuality?.turbidity ?? "N/A"} NTU** (Optimal: ${profile.turbidityOptimal})\n\n` +
-        `*Regarding your question: "${message}"*\n\n` +
-        `*Guidance:* Monitor your pond parameters closely. If pH is drifting, avoid quick chemical dumping and check pond buffer capacity. For temperature fluctuations, adjust feeding rates to avoid rotting uneaten feed on the pond floor. For hardware or probe issues, calibrate using standard buffer solutions.\n\n` +
-        `*(Note: To unlock live real-time Gemini 3.8 Flash interactive AI dialogs, provide a GEMINI_API_KEY in backend/.env)*`,
-      _source: "local_chat_engine"
+        `- Water Temp (DS18B20): ${waterQuality?.temperature !== null ? `${waterQuality.temperature} °C` : 'N/A'}\n` +
+        `- pH: ${waterQuality?.ph !== null ? waterQuality.ph : 'N/A'}\n` +
+        `- Turbidity: ${waterQuality?.turbidity !== null ? `${waterQuality.turbidity} NTU` : 'N/A'}\n` +
+        (waterQuality?.airTemperature !== undefined && waterQuality?.airTemperature !== null ? `- Air Temp (DHT11): ${waterQuality.airTemperature} °C\n` : '') +
+        (waterQuality?.humidity !== undefined && waterQuality?.humidity !== null ? `- Air Humidity (DHT11): ${waterQuality.humidity} %\n` : '') +
+        `- Pump 1 (Aerator): ${status?.pump1 ? 'RUNNING' : 'OFF'}\n` +
+        `- Pump 2 (Fresh Water): ${status?.pump2 ? 'RUNNING' : 'OFF'}\n\n` +
+        `*Farmer query: "${message}"*\n\n` +
+        `**Practical Guidance:** For ${species}, keep water temperature between ${profile.tempOptimal} and pH between ${profile.phOptimal}. If turbidity climbs or temperature increases, activate Pump 1 (Aerator) to sustain dissolved oxygen. For live AI responses, configure your free Google Gemini API key in backend/.env.`
     };
   }
 
-  const contextInstruction = `${FISH_CULTURE_SYSTEM_INSTRUCTION}
+  const systemInstruction = `You are AquaSentinel's expert aquaculture assistant conversing with a fish farmer.
+Cultured species: ${species} (${profile.scientificName})
+Target Optimal: Water Temp ${profile.tempOptimal}, pH ${profile.phOptimal}, Turbidity ${profile.turbidityOptimal}.
+Current Water Temp: ${waterQuality?.temperature !== null ? `${waterQuality.temperature}°C` : 'Unavailable'}
+Current pH: ${waterQuality?.ph !== null ? waterQuality.ph : 'Unavailable'}
+Current Turbidity: ${waterQuality?.turbidity !== null ? `${waterQuality.turbidity} NTU` : 'Unavailable'}
+Ambient Air Temp (DHT11): ${waterQuality?.airTemperature !== null ? `${waterQuality.airTemperature}°C` : 'Not connected'}
+Ambient Humidity (DHT11): ${waterQuality?.humidity !== null ? `${waterQuality.humidity}%` : 'Not connected'}
+Pump 1 (Aerator): ${status?.pump1 ? 'RUNNING' : 'OFF'}
+Pump 2 (Fresh Water): ${status?.pump2 ? 'RUNNING' : 'OFF'}
+System Overall Status: ${status?.overall || 'NORMAL'}
 
-You are now in interactive chat mode with the fish farmer.
-The farmer is monitoring ${species} in a ${farm?.cultureType || "Pond"}.
-Farm profile: Pond "${farm?.pondName || "Pond 1"}", Area: ${farm?.pondSize || "N/A"}, Age: ${farm?.fishAge || "N/A"}, Stock: ${farm?.approxStock || "N/A"}.
+Be concise, practical, encouraging, and farmer-focused. Mention Pump 1 or Pump 2 operation when appropriate. Give direct bullet points. If conditions are hazardous, tell them conservative steps first. Never invent sensor readings.`;
 
-Current Real-time Sensors:
-- Temperature: ${waterQuality?.temperature !== undefined ? `${waterQuality.temperature} °C` : "Sensor error"} (Status: ${status?.temperature || "NORMAL"})
-- pH: ${waterQuality?.ph !== undefined ? waterQuality.ph : "Sensor error"} (Status: ${status?.ph || "NORMAL"})
-- Turbidity: ${waterQuality?.turbidity !== undefined ? `${waterQuality.turbidity} NTU` : "Sensor error"} (Status: ${status?.turbidity || "NORMAL"})
-- Overall Status: ${status?.overall || "NORMAL"}
-- Hardware Buzzer: ${status?.buzzer ? "TRIGGERED" : "OFF"}
-
-Format your answer with clear markdown bullet points, bold highlights, and keep it practical for a farmer working by the pond. Always emphasize conservative, safe practices and state that your advice supports rather than replaces certified aquaculture veterinary consultation.`;
-
-  // Build message history
   const contents = [];
-  for (const item of conversationHistory.slice(-6)) {
+  for (const msg of conversationHistory.slice(-6)) {
     contents.push({
-      role: item.role === "user" ? "user" : "model",
-      parts: [{ text: item.text }]
+      role: msg.role === "user" ? "user" : "model",
+      parts: [{ text: msg.text }]
     });
   }
-  // Add latest question
   contents.push({
     role: "user",
     parts: [{ text: message }]
@@ -295,24 +300,20 @@ Format your answer with clear markdown bullet points, bold highlights, and keep 
         model,
         contents,
         config: {
-          systemInstruction: contextInstruction,
+          systemInstruction,
           temperature: 0.3
         }
       });
-
-      if (response.text) {
-        return {
-          reply: response.text.trim(),
-          _source: `gemini:${model}`
-        };
+      const reply = response.text?.trim();
+      if (reply) {
+        return { reply, _source: `gemini:${model}` };
       }
     } catch (err) {
-      console.warn(`[GeminiService Chat] Warning on model ${model}:`, err.message);
+      console.warn(`[GeminiChat] Warning: Model ${model} failed:`, err.message);
     }
   }
 
   return {
-    reply: "Sorry, the AI assistant could not complete the request at this moment. Please check your network connection or verify current pond parameters directly on the dashboard gauge.",
-    _source: "error_fallback"
+    reply: `Could not reach Gemini service. Please verify your internet connection or check your pond's visual surface state. If water temperature exceeds 32°C or turbidity is murky, turn on Pump 1 (Aerator).`
   };
 }

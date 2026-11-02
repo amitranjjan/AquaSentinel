@@ -13,17 +13,25 @@ export type OverallStatusCode = 'NORMAL' | 'ATTENTION' | 'WARNING' | 'CRITICAL' 
 export type UrgencyLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 export interface WaterQuality {
-  temperature: number | null;
-  ph: number | null;
-  turbidity: number | null;
+  temperature: number | null; // Water Temperature (DS18B20)
+  ph: number | null;          // Water pH (Analog Probe)
+  turbidity: number | null;   // Water Turbidity (Optical Probe)
+  airTemperature?: number | null; // Ambient Air Temp (DHT11)
+  humidity?: number | null;       // Ambient Air Humidity (DHT11)
+  pump1?: boolean;            // Relay 1 (Pump 1: Aerator / Circulation)
+  pump2?: boolean;            // Relay 2 (Pump 2: Freshwater / Drain)
 }
 
 export interface SensorStatus {
   temperature: SensorStatusCode;
   ph: SensorStatusCode;
   turbidity: SensorStatusCode;
+  airTemperature?: SensorStatusCode;
+  humidity?: SensorStatusCode;
   overall: OverallStatusCode;
   buzzer: boolean;
+  pump1?: boolean;
+  pump2?: boolean;
 }
 
 export interface FarmProfile {
@@ -52,6 +60,8 @@ export interface AiRecommendation {
     temperature: number | null;
     ph: number | null;
     turbidity: number | null;
+    airTemperature?: number | null;
+    humidity?: number | null;
   };
   farmContext?: {
     fishSpecies: string;
@@ -68,6 +78,8 @@ export interface TelemetryPoint {
   temperature: number | null;
   ph: number | null;
   turbidity: number | null;
+  airTemperature?: number | null;
+  humidity?: number | null;
   overallStatus: string;
 }
 

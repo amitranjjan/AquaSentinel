@@ -36,7 +36,7 @@ export const BleConnectPrompt: React.FC<BleConnectPromptProps> = ({
             AquaSentinel Node Required
           </h2>
           <p className="mt-2 text-sm text-slate-300 leading-relaxed max-w-lg mx-auto">
-            The web dashboard operates in real time <span className="text-cyan-400 font-semibold">only when connected to your AquaSentinel sensor hardware (ESP8266 + HM-10 or ESP32) via Bluetooth Low Energy (BLE)</span>.
+            The web dashboard operates in real time <span className="text-cyan-400 font-semibold">only when connected to your AquaSentinel hardware (Arduino Uno + HM-10, ESP8266, or ESP32) via Bluetooth Low Energy (BLE)</span>.
           </p>
         </div>
 
@@ -48,7 +48,7 @@ export const BleConnectPrompt: React.FC<BleConnectPromptProps> = ({
               Power Node
             </div>
             <p className="text-slate-400 text-[11px]">
-              Turn on your ESP8266 + HM-10 or ESP32 water sensor unit near your computer.
+              Turn on your Arduino Uno (with HM-10, DHT11, sensors & relays) near your computer.
             </p>
           </div>
 
@@ -58,17 +58,17 @@ export const BleConnectPrompt: React.FC<BleConnectPromptProps> = ({
               Pair Device
             </div>
             <p className="text-slate-400 text-[11px]">
-              Click Connect and select your BLE device (<span className="font-mono text-slate-200">HM-10 / AT-09 / AquaSentinel</span>) in the browser prompt.
+              Click Connect and select your BLE module (<span className="font-mono text-slate-200">HM-10 / AT-09 / AquaSentinel</span>) in the browser prompt.
             </p>
           </div>
 
           <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800">
             <div className="font-bold text-cyan-400 mb-1 flex items-center gap-1.5">
               <span className="w-4 h-4 rounded-full bg-cyan-900 flex items-center justify-center text-[10px] font-mono text-cyan-200">3</span>
-              Live Telemetry & AI
+              Live AI & Pumps
             </div>
             <p className="text-slate-400 text-[11px]">
-              Sensors stream live data, and Gemini analyzes pond safety instantly.
+              5 sensors stream live data, Gemini analyzes fish health, and you can control both pumps!
             </p>
           </div>
         </div>

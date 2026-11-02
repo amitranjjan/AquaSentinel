@@ -35,6 +35,7 @@ import { AiHistoryTable } from './components/AiHistoryTable';
 import { SimulatorPanel } from './components/SimulatorPanel';
 import { RecommendationDetailModal } from './components/RecommendationDetailModal';
 import { BleConnectPrompt } from './components/BleConnectPrompt';
+import { PumpControlCard } from './components/PumpControlCard';
 import { Terminal } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -42,15 +43,23 @@ export const App: React.FC = () => {
   const [waterQuality, setWaterQuality] = useState<WaterQuality>({
     temperature: null,
     ph: null,
-    turbidity: null
+    turbidity: null,
+    airTemperature: null,
+    humidity: null,
+    pump1: false,
+    pump2: false
   });
 
   const [sensorStatus, setSensorStatus] = useState<SensorStatus>({
     temperature: 'DISCONNECTED',
     ph: 'DISCONNECTED',
     turbidity: 'DISCONNECTED',
+    airTemperature: 'DISCONNECTED',
+    humidity: 'DISCONNECTED',
     overall: 'DISCONNECTED',
-    buzzer: false
+    buzzer: false,
+    pump1: false,
+    pump2: false
   });
 
   const [farmProfile, setFarmProfile] = useState<FarmProfile>(() => {
@@ -206,6 +215,8 @@ export const App: React.FC = () => {
           temperature: wq.temperature,
           ph: wq.ph,
           turbidity: wq.turbidity,
+          airTemperature: wq.airTemperature,
+          humidity: wq.humidity,
           overallStatus: st.overall
         }
       ];
@@ -246,7 +257,11 @@ export const App: React.FC = () => {
     const newWq: WaterQuality = {
       temperature: preset.temperature,
       ph: preset.ph,
-      turbidity: preset.turbidity
+      turbidity: preset.turbidity,
+      airTemperature: 29.5,
+      humidity: 68.0,
+      pump1: false,
+      pump2: false
     };
     handleUpdateWaterQuality(newWq);
   };
@@ -273,15 +288,27 @@ export const App: React.FC = () => {
           setConnectionMode('disconnected');
           setBleDeviceName(null);
           hasRequestedFirstBleAdviceRef.current = false;
-          setWaterQuality({ temperature: null, ph: null, turbidity: null });
+          setWaterQuality({
+            temperature: null,
+            ph: null,
+            turbidity: null,
+            airTemperature: null,
+            humidity: null,
+            pump1: false,
+            pump2: false
+          });
           setSensorStatus({
             temperature: 'DISCONNECTED',
             ph: 'DISCONNECTED',
             turbidity: 'DISCONNECTED',
+            airTemperature: 'DISCONNECTED',
+            humidity: 'DISCONNECTED',
             overall: 'DISCONNECTED',
-            buzzer: false
+            buzzer: false,
+            pump1: false,
+            pump2: false
           });
-          setTriggerNotification('AquaSentinel ESP32 disconnected');
+          setTriggerNotification('AquaSentinel Node disconnected');
         },
         (err) => {
           alert(`Bluetooth Error: ${err.message}`);
@@ -302,39 +329,45 @@ export const App: React.FC = () => {
     setConnectionMode('disconnected');
     setBleDeviceName(null);
     hasRequestedFirstBleAdviceRef.current = false;
-    setWaterQuality({ temperature: null, ph: null, turbidity: null });
+    setWaterQuality({
+      temperature: null,
+      ph: null,
+      turbidity: null,
+      airTemperature: null,
+      humidity: null,
+      pump1: false,
+      pump2: false
+    });
     setSensorStatus({
       temperature: 'DISCONNECTED',
       ph: 'DISCONNECTED',
       turbidity: 'DISCONNECTED',
+      airTemperature: 'DISCONNECTED',
+      humidity: 'DISCONNECTED',
       overall: 'DISCONNECTED',
-      buzzer: false
+      buzzer: false,
+      pump1: false,
+      pump2: false
     });
-    setTriggerNotification('AquaSentinel BLE disconnected');
+    setTriggerNotification('BLE disconnected by user');
   };
 
+  // Demo Simulator Mode
   const handleEnableSimulator = () => {
     setConnectionMode('simulator');
+    setBleDeviceName('Demo Simulator');
     setIsSimulatorOpen(true);
     setIsDriftActive(true);
-    const initialWq: WaterQuality = {
-      temperature: 29.25,
-      ph: 6.95,
-      turbidity: 55.6
-    };
-    setWaterQuality(initialWq);
-    const newStatuses = computeStatuses(initialWq, farmProfile.fishSpecies);
-    setSensorStatus(newStatuses);
-    recordTelemetryPoint(initialWq, newStatuses);
-    requestAdvice(true, 'simulator_enabled', 'Simulation mode activated for test verification');
+    handleSelectPreset(SIMULATOR_PRESETS[0]);
+    requestAdvice(true, 'simulator_enabled', 'Demo simulator active (Simulated Pond)');
   };
 
-  // Farmer Chat Handler
-  const handleSendMessage = async (msg: string) => {
+  // Chat message submit
+  const handleSendMessage = async (userText: string) => {
     const userMsg: ChatMessage = {
-      id: `usr-${Date.now()}`,
+      id: Date.now().toString(),
       role: 'user',
-      text: msg,
+      text: userText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
@@ -343,28 +376,27 @@ export const App: React.FC = () => {
 
     try {
       const res = await sendChatMessage({
-        message: msg,
-        conversationHistory: [...chatMessages, userMsg],
+        message: userText,
+        conversationHistory: chatMessages,
         waterQuality,
         status: sensorStatus,
         farm: farmProfile
       });
 
-      if (res.success && res.data) {
-        const modelMsg: ChatMessage = {
-          id: `mod-${Date.now()}`,
-          role: 'model',
-          text: res.data.reply,
-          timestamp: new Date(res.data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          _source: res.data._source
-        };
-        setChatMessages(prev => [...prev, modelMsg]);
-      }
+      const botMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'model',
+        text: res.data.reply,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        _source: res.data._source
+      };
+
+      setChatMessages(prev => [...prev, botMsg]);
     } catch (err: any) {
       const errMsg: ChatMessage = {
-        id: `err-${Date.now()}`,
+        id: (Date.now() + 1).toString(),
         role: 'model',
-        text: 'Unable to reach the assistant server. Please check your backend connection.',
+        text: `Error contacting assistant: ${err.message}. Please check connection.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setChatMessages(prev => [...prev, errMsg]);
@@ -419,7 +451,7 @@ export const App: React.FC = () => {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-6 space-y-6">
-        {/* Prominent BLE Connection Banner: Web operates only when device is connected via BLE */}
+        {/* Prominent BLE Connection Banner */}
         {connectionMode === 'disconnected' && (
           <BleConnectPrompt
             onConnectBLE={handleConnectBLE}
@@ -445,8 +477,8 @@ export const App: React.FC = () => {
           species={farmProfile.fishSpecies}
         />
 
-        {/* 3. Sensor Metrics Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {/* 3. Sensor Metrics Cards Grid (Water Temp, pH, Turbidity, DHT11 Air Temp & Humidity) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <SensorCard
             type="temperature"
             value={waterQuality.temperature}
@@ -471,9 +503,32 @@ export const App: React.FC = () => {
             targetRange="< 50 NTU"
             speciesName={farmProfile.fishSpecies}
           />
+          <SensorCard
+            type="airTemperature"
+            value={waterQuality.airTemperature ?? null}
+            status={sensorStatus.airTemperature ?? (waterQuality.airTemperature !== null ? 'NORMAL' : 'DISCONNECTED')}
+            unit="°C"
+            targetRange="20 - 35 °C"
+            speciesName={farmProfile.fishSpecies}
+          />
+          <SensorCard
+            type="humidity"
+            value={waterQuality.humidity ?? null}
+            status={sensorStatus.humidity ?? (waterQuality.humidity !== null ? 'NORMAL' : 'DISCONNECTED')}
+            unit="%"
+            targetRange="40 - 80 %"
+            speciesName={farmProfile.fishSpecies}
+          />
         </div>
 
-        {/* 4. Gemini Fish-Culture Assistant Card (PRD Section 5) */}
+        {/* 4. Dual Relay Pump Controller (Aerator Pump 1 & Freshwater Pump 2) */}
+        <PumpControlCard
+          pump1Active={Boolean(waterQuality.pump1 || sensorStatus.pump1)}
+          pump2Active={Boolean(waterQuality.pump2 || sensorStatus.pump2)}
+          isConnected={connectionMode === 'ble'}
+        />
+
+        {/* 5. Gemini Fish-Culture Assistant Card (PRD Section 5) */}
         <GeminiAssistantCard
           advice={currentAdvice}
           isLoading={isAnalyzing}
@@ -488,13 +543,13 @@ export const App: React.FC = () => {
           triggerNotification={triggerNotification}
         />
 
-        {/* 5. Water Quality Time Series Chart (PRD Section 16) */}
+        {/* 6. Water Quality Time Series Chart (PRD Section 16) */}
         <WaterQualityChart
           data={telemetryHistory}
           farmProfile={farmProfile}
         />
 
-        {/* 6. AI History Table (PRD Section 15) */}
+        {/* 7. AI History Table (PRD Section 15) */}
         <AiHistoryTable
           history={adviceHistory}
           onClearHistory={handleClearHistory}
@@ -509,7 +564,7 @@ export const App: React.FC = () => {
           <div className="flex items-center gap-2.5">
             <Terminal className="w-4 h-4 text-cyan-400 shrink-0" />
             <span>
-              ESP32 Firmware ready in <code className="font-mono text-cyan-300">firmware/AquaSentinel_ESP32/</code>. Connects directly via Chrome Web Bluetooth.
+              Arduino Uno + HM-10 Firmware ready in <code className="font-mono text-cyan-300">firmware/AquaSentinel_ArduinoUno/</code>. Connects directly via Chrome Web Bluetooth.
             </span>
           </div>
           <button
@@ -548,7 +603,7 @@ export const App: React.FC = () => {
 
       {/* Footer */}
       <footer className="border-t border-slate-900 bg-slate-950 py-4 px-6 text-center text-xs text-slate-600">
-        AquaSentinel • IoT Water Quality & Gemini AI Decision Support for Fish Farming
+        AquaSentinel • IoT Water Quality & Gemini AI Decision Support for Fish Farming • Owner: Amit Ranjan
       </footer>
     </div>
   );

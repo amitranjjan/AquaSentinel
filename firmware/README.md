@@ -1,12 +1,102 @@
 # AquaSentinel Hardware & Firmware Guide
 
-AquaSentinel supports two hardware configurations:
-1. **ESP32 (Native BLE)** — Recommended, uses built-in Bluetooth Low Energy.
-2. **ESP8266 + HM-10 (BLE Bridge)** — Uses external HM-10 / AT-09 BLE module via SoftwareSerial.
+AquaSentinel supports three hardware configurations:
+1. **Arduino Uno + HM-10 BLE + 2 Relays (Current Multi-Sensor Setup)** — DHT11, DS18B20, pH, Turbidity, 2 Relays, 2 Pumps.
+2. **ESP32 (Native BLE)** — Recommended for compact builds with built-in Bluetooth Low Energy.
+3. **ESP8266 + HM-10 (BLE Bridge)** — Uses external HM-10 / AT-09 BLE module via SoftwareSerial.
 
 ---
 
-## 1. ESP32 Architecture & Setup (Native BLE)
+## 1. Arduino Uno Setup (DHT11, DS18B20, pH, Turbidity, 2 Relays & 2 Pumps)
+
+This configuration turns your **Arduino Uno** into an automated telemetry station and pump actuator node that connects directly to the AquaSentinel web dashboard over Web Bluetooth.
+
+### System Diagram
+
+```
+                              +---------------------------------------+
+                              |          Arduino Uno (5V)             |
+                              |                                       |
+  [DS18B20 Water Temp] ------>| Pin 4  (1-Wire Bus + 4.7k Pullup)     |
+                              |                                       |
+  [DHT11 Air Temp & Hum] ---->| Pin 5  (Digital 1-Wire Data)          |
+                              |                                       |
+  [Analog pH Probe] --------->| Pin A0 (Analog 0-5V Input)            |
+                              |                                       |
+  [Turbidity Optical Probe] ->| Pin A1 (Analog 0-5V Input)            |
+                              |                                       |
+  [HM-10 BLE Module TX] ----->| Pin 2  (SoftwareSerial RX)            |
+  [HM-10 BLE Module RX] <-----| Pin 3  (SoftwareSerial TX)            |
+                              |                                       |
+  [Dual Relay Module IN1] <---| Pin 7  (Relay 1: Pump 1 Aerator)      |
+  [Dual Relay Module IN2] <---| Pin 8  (Relay 2: Pump 2 Fresh Water)  |
+                              |                                       |
+  [Optional Alert Buzzer] <---| Pin 6  (Digital Alert Tone)           |
+                              +---------------------------------------+
+                                                  │
+                                                  │ (20-byte BLE Packets)
+                                                  ▼
+                                      AquaSentinel Web Dashboard
+                                       (Chrome / Edge Web Bluetooth)
+                                                  │
+                                                  ▼
+                                        Google Gemini 3.8 Flash
+```
+
+### Complete Arduino Uno Pinout & Wiring Table
+
+| Component | Component Pin | Arduino Uno Pin | Power | Notes |
+|---|---|---|---|---|
+| **DS18B20 Water Temp** | VCC (Red) | 5V | 5V | Digital waterproof probe |
+| | GND (Black) | GND | 0V | Common Ground |
+| | DATA (Yellow/Blue)| **Pin 4** | 5V | Requires **4.7 kΩ pull-up resistor** to 5V |
+| **DHT11 (Air & Hum)** | VCC (+) | 5V | 5V | Ambient temperature & relative humidity |
+| | GND (-) | GND | 0V | Common Ground |
+| | DATA (Out) | **Pin 5** | 5V | Connect directly to Pin 5 |
+| **Analog pH Sensor** | VCC | 5V | 5V | Signal conditioning board |
+| | GND | GND | 0V | Common Ground |
+| | Aout (Po) | **Pin A0** | 0 - 5V | Analog input |
+| **Turbidity Sensor** | VCC | 5V | 5V | Optical transmitter/receiver board |
+| | GND | GND | 0V | Common Ground |
+| | Aout | **Pin A1** | 0 - 5V | Analog input |
+| **HM-10 BLE Module** | VCC | 5V (or 3.3V) | 5V | Bluetooth 4.0 LE UART Bridge |
+| | GND | GND | 0V | Common Ground |
+| | TXD | **Pin 2 (RX)** | 3.3V/5V | Uno listens on Pin 2 |
+| | RXD | **Pin 3 (TX)** | 3.3V/5V | Uno sends on Pin 3 |
+| **2-Channel Relay** | VCC | 5V | 5V | Relay coil power |
+| | GND | GND | 0V | Common Ground |
+| | IN1 | **Pin 7** | 5V | Controls **Pump 1 (Aerator / Circulation)** |
+| | IN2 | **Pin 8** | 5V | Controls **Pump 2 (Freshwater Flushing)** |
+| **Alert Buzzer** | (+) | **Pin 6** | 5V | Sounds during `DANGER` alert |
+| | (-) | GND | 0V | Common Ground |
+
+---
+
+### Pump & Relay Electrical Safety
+
+> [!CAUTION]
+> **DO NOT power the two pumps directly from the Arduino Uno's 5V pin!** 
+> Pumps are inductive electric motors that draw high current spikes and produce reverse-EMF voltage surges that can reset or permanently damage your Arduino board.
+>
+> 1. Power the Arduino Uno via standard USB cable (5V).
+> 2. Power your two 5V or 12V DC pumps from an **external separate power adapter** (e.g. 12V 2A DC adapter).
+> 3. Route only the **Positive (+)** wire of each pump through the **Common (COM)** and **Normally Open (NO)** terminals of the relay module.
+
+---
+
+### Remote BLE Commands (Dashboard to Arduino)
+
+The web dashboard and automated threshold engine can send single-line commands to the Arduino Uno:
+* `P1_ON` — Manually turns ON Pump 1 (Aerator).
+* `P1_OFF` — Manually turns OFF Pump 1 (Aerator).
+* `P2_ON` — Manually turns ON Pump 2 (Freshwater).
+* `P2_OFF` — Manually turns OFF Pump 2 (Freshwater).
+* `AUTO_ON` — Re-enables automated sensor threshold control.
+* `AUTO_OFF` — Disables automatic triggers.
+
+---
+
+## 2. ESP32 Architecture & Setup (Native BLE)
 
 ```
                       +---------------------------------------+
@@ -24,115 +114,38 @@ AquaSentinel supports two hardware configurations:
                       |                                       |
                       | [Built-in BLE 4.2 GATT Server]        |
                       +---------------------------------------+
-                                          |
-                                          | (BLE GATT Notifications)
-                                          v
-                              AquaSentinel Web Dashboard
-                               (Web Bluetooth in Chrome/Edge)
-                                          |
-                                          v
-                                Backend (Express + Gemini)
 ```
-
-### Pinout Table (ESP32)
-
-| Sensor / Actuator | Sensor Pin | ESP32 Pin | Voltage | Notes |
-|---|---|---|---|---|
-| **DS18B20 Temp** | VCC (Red) | 3V3 / 5V | 3.3V or 5V | Waterproof digital probe |
-| | GND (Black) | GND | 0V | |
-| | DATA (Yellow/Blue) | **GPIO 4** | 3.3V | Requires **4.7 kΩ pull-up resistor** to 3.3V |
-| **Analog pH Sensor** | VCC | 5V / 3.3V | 5V (or 3.3V) | Signal board output |
-| | GND | GND | 0V | Common ground |
-| | Analog Signal (Po) | **GPIO 34** | 0 - 3.3V | Connected to ADC1 (safe with WiFi/BLE) |
-| **Turbidity Sensor** | VCC | 5V | 5V | Optical transmitter & receiver |
-| | GND | GND | 0V | Common ground |
-| | Analog Signal (Aout)| **GPIO 35** | 0 - 3.3V | Connected to ADC1 (safe with WiFi/BLE) |
-| **Alert Buzzer** | Positive (+) | **GPIO 23** | 3.3V / 5V | Active or passive buzzer |
-| | Negative (-) | GND | 0V | |
-| **BLE Status LED** | Anode (+) | **GPIO 2** | 3.3V | Onboard Blue LED on most ESP32 boards |
-
-> **IMPORTANT ADC NOTE**: ESP32 ADC2 pins (GPIO 0, 2, 4, 12, 13, 14, 15, 25, 26, 27) cannot be used while WiFi or Bluetooth is active. For this reason, the pH and Turbidity analog outputs are intentionally mapped to **ADC1 pins (GPIO 34 and GPIO 35)**, guaranteeing 100% reliable analog conversion while BLE is transmitting.
 
 ---
 
-## 2. ESP8266 + HM-10 Setup (External BLE UART Bridge)
-
-Since the ESP8266 only has Wi-Fi and lacks built-in Bluetooth, an external **HM-10 (or AT-09 / CC2541 / MLT-BT05)** BLE module is connected to the ESP8266 via SoftwareSerial.
-
-```
-                      +---------------------------------------+
-                      |       AquaSentinel ESP8266            |
-                      |                                       |
-  [DS18B20 Temp] ---->| D2 (GPIO 4) (1-Wire + 4.7k Pullup)    |
-                      |                                       |
-  [Analog Sensor] --->| A0 (Analog ADC input)                 |
-                      |                                       |
-  [Piezo Buzzer] <----| D1 (GPIO 5) (Alert Output)            |
-                      |                                       |
-  [Status LED]   <----| D4 (GPIO 2) (Active LOW Onboard LED)  |
-                      |                                       |
-                      | D5 (GPIO 14) RX <--- TXD  [ HM-10   ] |
-                      | D6 (GPIO 12) TX ---> RXD  [ BLE 4.0 ] |
-                      +---------------------------------------+
-                                          |
-                                          | (20-byte BLE Packets)
-                                          v
-                              AquaSentinel Web Dashboard
-                               (Web Bluetooth in Chrome/Edge)
-```
-
-### Wiring Table (ESP8266 to HM-10)
+## 3. ESP8266 + HM-10 Setup (External BLE UART Bridge)
 
 | HM-10 Pin | ESP8266 Pin | Notes |
 |---|---|---|
 | **VCC** | 5V (or 3V3) | Power supply |
 | **GND** | GND | Common ground |
 | **TXD** | **D5 (GPIO 14)** | SoftwareSerial RX on ESP8266 |
-| **RXD** | **D6 (GPIO 12)** | SoftwareSerial TX on ESP8266 (3.3V logic matches HM-10) |
-
-### How the ESP8266 + HM-10 Communication Works
-
-1. **HM-10 GATT Service**: The HM-10 module exposes standard UUID `0000ffe0-0000-1000-8000-00805f9b34fb` and Characteristic `0000ffe1-0000-1000-8000-00805f9b34fb`.
-2. **20-byte MTU Chunking**: BLE notifications are capped at 20 bytes per transmission. When the ESP8266 sends a 150-byte JSON line ending in `\n`, the HM-10 automatically breaks it into consecutive 20-byte chunks.
-3. **Frontend Reassembly**: The AquaSentinel web dashboard accumulates all received chunks in a text buffer. Once a `\n` character is detected, the full JSON line is sliced out and safely parsed with `JSON.parse`.
-
----
-
-## 3. BLE GATT Specifications
-
-* **Custom Service UUID**: `0000ffe0-0000-1000-8000-00805f9b34fb`
-* **Sensor Characteristic UUID**: `0000ffe1-0000-1000-8000-00805f9b34fb` (Properties: `READ`, `NOTIFY`)
-* **Payload Format**: Stringified JSON line terminated with `\n`, updated every 2 seconds:
-  ```json
-  {"temperature":29.25,"ph":6.95,"turbidity":55.6,"temperatureStatus":"NORMAL","phStatus":"NORMAL","turbidityStatus":"NORMAL","overallStatus":"NORMAL","buzzer":0}
-  ```
+| **RXD** | **D6 (GPIO 12)** | SoftwareSerial TX on ESP8266 |
 
 ---
 
 ## 4. Arduino IDE Setup & Libraries
 
+### For Arduino Uno:
+1. Sketch: `firmware/AquaSentinel_ArduinoUno/AquaSentinel_ArduinoUno.ino`
+2. Board: **Tools -> Board -> Arduino AVR Boards -> Arduino Uno**
+3. Libraries to install via **Sketch -> Include Library -> Manage Libraries**:
+   - `DHT sensor library` by Adafruit
+   - `Adafruit Unified Sensor` by Adafruit
+   - `OneWire` by Paul Stoffregen
+   - `DallasTemperature` by Miles Burton
+   - `SoftwareSerial` (comes pre-installed with Arduino AVR Core)
+4. Select your COM Port and click **Upload**.
+
 ### For ESP32:
 1. Sketch: `firmware/AquaSentinel_ESP32/AquaSentinel_ESP32.ino`
-2. Libraries: `OneWire`, `DallasTemperature`, `ESP32 BLE Arduino` (built into ESP32 board support).
-3. Board: `DOIT ESP32 DEVKIT V1` or `ESP32 Dev Module`.
+2. Board: `DOIT ESP32 DEVKIT V1`
 
-### For ESP8266 + HM-10:
+### For ESP8266:
 1. Sketch: `firmware/AquaSentinel_ESP8266/AquaSentinel_ESP8266.ino`
-2. Libraries: `OneWire`, `DallasTemperature`, `SoftwareSerial` (built into ESP8266 board support).
-3. Board: `NodeMCU 1.0 (ESP-12E Module)` or `LOLIN(WEMOS) D1 R2 & mini`.
-4. HM-10 Default Baud: `9600`.
-
----
-
-## 5. Sensor Calibration
-
-### pH Sensor Calibration
-1. Rinse the pH probe in distilled water.
-2. Dip the probe into standard pH 7.0 buffer solution.
-3. Observe voltage printed in Serial Monitor. Adjust the onboard potentiometer on the pH board until output voltage is approximately 2.5V.
-4. Update `PH_OFFSET` and `PH_SLOPE` in the `.ino` sketch if using 2-point calibration (pH 4.0 and pH 7.0).
-
-### Turbidity Calibration
-1. Submerge optical probe into pure distilled water (0 NTU).
-2. Read the voltage (typically around 3.2V to 4.1V depending on sensor manufacturer).
-3. Set the clean water reference voltage in code.
+2. Board: `NodeMCU 1.0 (ESP-12E Module)`

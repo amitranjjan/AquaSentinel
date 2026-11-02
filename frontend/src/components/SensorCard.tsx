@@ -1,9 +1,9 @@
 import React from 'react';
-import { Thermometer, Droplet, Activity, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Thermometer, Droplet, Activity, AlertCircle, CheckCircle2, CloudSun, Gauge } from 'lucide-react';
 import type { SensorStatusCode } from '../types';
 
 interface SensorCardProps {
-  type: 'temperature' | 'ph' | 'turbidity';
+  type: 'temperature' | 'ph' | 'turbidity' | 'airTemperature' | 'humidity';
   value: number | null;
   status: SensorStatusCode;
   unit: string;
@@ -31,6 +31,28 @@ export const SensorCard: React.FC<SensorCardProps> = ({
           max: 40,
           optimalMin: 26,
           optimalMax: 32,
+        };
+      case 'airTemperature':
+        return {
+          title: 'Air Temperature (DHT11)',
+          icon: <CloudSun className="w-5 h-5 text-yellow-400" />,
+          accentBg: 'from-yellow-500/10 to-amber-500/5',
+          borderColor: 'border-yellow-500/20',
+          min: 10,
+          max: 50,
+          optimalMin: 20,
+          optimalMax: 35,
+        };
+      case 'humidity':
+        return {
+          title: 'Air Humidity (DHT11)',
+          icon: <Gauge className="w-5 h-5 text-indigo-400" />,
+          accentBg: 'from-indigo-500/10 to-blue-500/5',
+          borderColor: 'border-indigo-500/20',
+          min: 10,
+          max: 100,
+          optimalMin: 40,
+          optimalMax: 80,
         };
       case 'ph':
         return {
@@ -135,7 +157,7 @@ export const SensorCard: React.FC<SensorCardProps> = ({
         ) : (
           <>
             <span className="text-4xl font-extrabold tracking-tight text-white font-mono">
-              {value.toFixed(type === 'turbidity' ? 1 : 2)}
+              {value.toFixed(type === 'ph' ? 2 : 1)}
             </span>
             <span className="text-sm font-semibold text-slate-400">{unit}</span>
           </>
