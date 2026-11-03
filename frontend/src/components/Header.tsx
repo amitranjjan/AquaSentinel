@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Waves,
   Bluetooth,
+  Cable,
   BluetoothOff,
   Sliders,
   UserCheck,
@@ -12,10 +13,11 @@ import {
 import type { SensorStatus, FarmProfile } from '../types';
 
 interface HeaderProps {
-  connectionMode: 'ble' | 'simulator' | 'disconnected';
+  connectionMode: 'ble' | 'serial' | 'simulator' | 'disconnected';
   bleDeviceName: string | null;
   onConnectBLE: () => void;
-  onDisconnectBLE: () => void;
+  onConnectSerial: () => void;
+  onDisconnect: () => void;
   onToggleSimulator: () => void;
   isSimulatorOpen: boolean;
   onOpenProfile: () => void;
@@ -30,7 +32,8 @@ export const Header: React.FC<HeaderProps> = ({
   connectionMode,
   bleDeviceName,
   onConnectBLE,
-  onDisconnectBLE,
+  onConnectSerial,
+  onDisconnect,
   onToggleSimulator,
   isSimulatorOpen,
   onOpenProfile,
@@ -93,9 +96,21 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs font-medium">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
                 <Bluetooth className="w-3.5 h-3.5 text-emerald-400" />
-                <span>BLE: CONNECTED ({bleDeviceName || 'ESP32'})</span>
+                <span>BLE: CONNECTED ({bleDeviceName || 'Device'})</span>
                 <button
-                  onClick={onDisconnectBLE}
+                  onClick={onDisconnect}
+                  className="ml-1 text-slate-400 hover:text-white text-[11px] underline"
+                >
+                  Disconnect
+                </button>
+              </div>
+            ) : connectionMode === 'serial' ? (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs font-medium">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                <Cable className="w-3.5 h-3.5 text-emerald-400" />
+                <span>SERIAL: CONNECTED ({bleDeviceName || 'HC-05 / COM'})</span>
+                <button
+                  onClick={onDisconnect}
                   className="ml-1 text-slate-400 hover:text-white text-[11px] underline"
                 >
                   Disconnect
@@ -109,20 +124,32 @@ export const Header: React.FC<HeaderProps> = ({
             ) : (
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 text-xs">
                 <BluetoothOff className="w-3.5 h-3.5" />
-                <span>BLE: DISCONNECTED</span>
+                <span>DISCONNECTED</span>
               </div>
             )}
           </div>
 
-          {/* Connect BLE Button */}
-          {connectionMode !== 'ble' && (
-            <button
-              onClick={onConnectBLE}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium shadow-md shadow-blue-600/20 transition-colors"
-            >
-              <Bluetooth className="w-3.5 h-3.5" />
-              <span>Connect BLE</span>
-            </button>
+          {/* Quick Connect Action Buttons when Disconnected */}
+          {connectionMode === 'disconnected' && (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={onConnectSerial}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-600/20 transition-colors"
+                title="Connect HC-05 Bluetooth or USB Cable via Web Serial"
+              >
+                <Cable className="w-3.5 h-3.5" />
+                <span>Connect HC-05 / USB</span>
+              </button>
+
+              <button
+                onClick={onConnectBLE}
+                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs transition-colors"
+                title="Connect BLE (HM-10 or ESP32)"
+              >
+                <Bluetooth className="w-3.5 h-3.5 text-cyan-400" />
+                <span>BLE</span>
+              </button>
+            </div>
           )}
 
           {/* Toggle Simulator Controls */}

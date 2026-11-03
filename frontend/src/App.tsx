@@ -19,6 +19,10 @@ import {
   disconnectBLE
 } from './services/bleService';
 import {
+  requestAndConnectSerial,
+  disconnectSerial
+} from './services/serialService';
+import {
   computeStatuses,
   applyRealisticDrift,
   type SimulatorPreset,
@@ -39,7 +43,7 @@ import { PumpControlCard } from './components/PumpControlCard';
 import { Terminal } from 'lucide-react';
 
 export const App: React.FC = () => {
-  // 1. Initial State: Disconnected by default until BLE device is paired
+  // 1. Initial State: Disconnected by default until device is paired
   const [waterQuality, setWaterQuality] = useState<WaterQuality>({
     temperature: null,
     ph: null,
@@ -85,8 +89,8 @@ export const App: React.FC = () => {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [selectedDetailRec, setSelectedDetailRec] = useState<AiRecommendation | null>(null);
 
-  // Connection & Simulator state: Web only operates when connected to BLE device
-  const [connectionMode, setConnectionMode] = useState<'ble' | 'simulator' | 'disconnected'>('disconnected');
+  // Connection mode: 'ble' (HM-10/ESP32), 'serial' (HC-05/USB), 'simulator', or 'disconnected'
+  const [connectionMode, setConnectionMode] = useState<'ble' | 'serial' | 'simulator' | 'disconnected'>('disconnected');
   const [bleDeviceName, setBleDeviceName] = useState<string | null>(null);
   const [isDriftActive, setIsDriftActive] = useState<boolean>(false);
   const [buzzerMuted, setBuzzerMuted] = useState(false);
@@ -108,11 +112,34 @@ export const App: React.FC = () => {
   const lastAnalysisTimeRef = useRef<number>(0);
   const AUTO_ANALYSIS_COOLDOWN_MS = 45 * 1000;
 
+  // Helper to reset sensors on disconnect
+  const resetSensorsToDisconnected = useCallback(() => {
+    setWaterQuality({
+      temperature: null,
+      ph: null,
+      turbidity: null,
+      airTemperature: null,
+      humidity: null,
+      pump1: false,
+      pump2: false
+    });
+    setSensorStatus({
+      temperature: 'DISCONNECTED',
+      ph: 'DISCONNECTED',
+      turbidity: 'DISCONNECTED',
+      airTemperature: 'DISCONNECTED',
+      humidity: 'DISCONNECTED',
+      overall: 'DISCONNECTED',
+      buzzer: false,
+      pump1: false,
+      pump2: false
+    });
+  }, []);
+
   // Save profile changes to localStorage
   const handleSaveProfile = (updated: FarmProfile) => {
     setFarmProfile(updated);
     localStorage.setItem('aquasentinel_farm_profile', JSON.stringify(updated));
-    // Recompute statuses for new species
     const newStatuses = computeStatuses(waterQuality, updated.fishSpecies);
     setSensorStatus(newStatuses);
   };
@@ -147,7 +174,6 @@ export const App: React.FC = () => {
         lastAnalyzedStatusRef.current = `${sensorStatus.overall}-${sensorStatus.ph}-${sensorStatus.temperature}-${sensorStatus.turbidity}`;
         lastAnalysisTimeRef.current = Date.now();
 
-        // Refresh advice history
         fetchAdviceHistory().then(h => {
           if (h.data) setAdviceHistory(h.data);
         }).catch(() => {});
@@ -159,9 +185,8 @@ export const App: React.FC = () => {
     }
   }, [waterQuality, sensorStatus, farmProfile]);
 
-  // Automatic alert detection (PRD Section 6) - only active when device is connected
+  // Automatic alert detection
   useEffect(() => {
-    // Only analyze when device is actively streaming data
     if (connectionMode === 'disconnected' || (waterQuality.temperature === null && waterQuality.ph === null)) {
       return;
     }
@@ -220,7 +245,6 @@ export const App: React.FC = () => {
           overallStatus: st.overall
         }
       ];
-      // Keep latest 30 telemetry points
       if (updated.length > 30) updated.shift();
       return updated;
     });
@@ -266,11 +290,11 @@ export const App: React.FC = () => {
     handleUpdateWaterQuality(newWq);
   };
 
-  // Web Bluetooth Handlers
-  const hasRequestedFirstBleAdviceRef = useRef(false);
+  const hasRequestedFirstAdviceRef = useRef(false);
 
+  // 1. Web Bluetooth (HM-10 / ESP32) Handler
   const handleConnectBLE = async () => {
-    hasRequestedFirstBleAdviceRef.current = false;
+    hasRequestedFirstAdviceRef.current = false;
     try {
       const devName = await requestAndConnectBLE(
         (data) => {
@@ -278,36 +302,16 @@ export const App: React.FC = () => {
           setSensorStatus(data.status);
           recordTelemetryPoint(data.waterQuality, data.status);
 
-          // Request first AI assessment on initial BLE telemetry packet
-          if (!hasRequestedFirstBleAdviceRef.current && (data.waterQuality.temperature !== null || data.waterQuality.ph !== null)) {
-            hasRequestedFirstBleAdviceRef.current = true;
+          if (!hasRequestedFirstAdviceRef.current && (data.waterQuality.temperature !== null || data.waterQuality.ph !== null)) {
+            hasRequestedFirstAdviceRef.current = true;
             requestAdvice(true, 'ble_connected', `Live telemetry established from ${devName}`);
           }
         },
         () => {
           setConnectionMode('disconnected');
           setBleDeviceName(null);
-          hasRequestedFirstBleAdviceRef.current = false;
-          setWaterQuality({
-            temperature: null,
-            ph: null,
-            turbidity: null,
-            airTemperature: null,
-            humidity: null,
-            pump1: false,
-            pump2: false
-          });
-          setSensorStatus({
-            temperature: 'DISCONNECTED',
-            ph: 'DISCONNECTED',
-            turbidity: 'DISCONNECTED',
-            airTemperature: 'DISCONNECTED',
-            humidity: 'DISCONNECTED',
-            overall: 'DISCONNECTED',
-            buzzer: false,
-            pump1: false,
-            pump2: false
-          });
+          hasRequestedFirstAdviceRef.current = false;
+          resetSensorsToDisconnected();
           setTriggerNotification('AquaSentinel Node disconnected');
         },
         (err) => {
@@ -324,32 +328,54 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleDisconnectBLE = () => {
-    disconnectBLE();
+  // 2. Web Serial (HC-05 Bluetooth COM / USB Cable) Handler
+  const handleConnectSerial = async () => {
+    hasRequestedFirstAdviceRef.current = false;
+    try {
+      const portLabel = await requestAndConnectSerial(
+        (data) => {
+          setWaterQuality(data.waterQuality);
+          setSensorStatus(data.status);
+          recordTelemetryPoint(data.waterQuality, data.status);
+
+          if (!hasRequestedFirstAdviceRef.current && (data.waterQuality.temperature !== null || data.waterQuality.ph !== null)) {
+            hasRequestedFirstAdviceRef.current = true;
+            requestAdvice(true, 'serial_connected', `Live telemetry established from ${portLabel}`);
+          }
+        },
+        () => {
+          setConnectionMode('disconnected');
+          setBleDeviceName(null);
+          hasRequestedFirstAdviceRef.current = false;
+          resetSensorsToDisconnected();
+          setTriggerNotification('Serial / HC-05 device disconnected');
+        },
+        (err) => {
+          alert(`Serial/HC-05 Error: ${err.message}`);
+        }
+      );
+      setConnectionMode('serial');
+      setBleDeviceName(portLabel);
+      setIsSimulatorOpen(false);
+      setIsDriftActive(false);
+      setTriggerNotification(`Connected to ${portLabel}`);
+    } catch (err: any) {
+      console.warn('Serial connect rejected or failed:', err.message);
+    }
+  };
+
+  // Disconnect any active hardware
+  const handleDisconnect = async () => {
+    if (connectionMode === 'ble') {
+      disconnectBLE();
+    } else if (connectionMode === 'serial') {
+      await disconnectSerial();
+    }
     setConnectionMode('disconnected');
     setBleDeviceName(null);
-    hasRequestedFirstBleAdviceRef.current = false;
-    setWaterQuality({
-      temperature: null,
-      ph: null,
-      turbidity: null,
-      airTemperature: null,
-      humidity: null,
-      pump1: false,
-      pump2: false
-    });
-    setSensorStatus({
-      temperature: 'DISCONNECTED',
-      ph: 'DISCONNECTED',
-      turbidity: 'DISCONNECTED',
-      airTemperature: 'DISCONNECTED',
-      humidity: 'DISCONNECTED',
-      overall: 'DISCONNECTED',
-      buzzer: false,
-      pump1: false,
-      pump2: false
-    });
-    setTriggerNotification('BLE disconnected by user');
+    hasRequestedFirstAdviceRef.current = false;
+    resetSensorsToDisconnected();
+    setTriggerNotification('Hardware disconnected by user');
   };
 
   // Demo Simulator Mode
@@ -421,15 +447,17 @@ export const App: React.FC = () => {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime); // 880Hz alert tone
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
         gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.15); // short 150ms beep
+        osc.stop(audioCtx.currentTime + 0.15);
       } catch {}
     }
   }, [sensorStatus.buzzer, buzzerMuted, waterQuality]);
+
+  const isHardwareConnected = connectionMode === 'ble' || connectionMode === 'serial';
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
@@ -438,7 +466,8 @@ export const App: React.FC = () => {
         connectionMode={connectionMode}
         bleDeviceName={bleDeviceName}
         onConnectBLE={handleConnectBLE}
-        onDisconnectBLE={handleDisconnectBLE}
+        onConnectSerial={handleConnectSerial}
+        onDisconnect={handleDisconnect}
         onToggleSimulator={() => setIsSimulatorOpen(prev => !prev)}
         isSimulatorOpen={isSimulatorOpen}
         onOpenProfile={() => setIsProfileOpen(true)}
@@ -451,10 +480,11 @@ export const App: React.FC = () => {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-6 space-y-6">
-        {/* Prominent BLE Connection Banner */}
+        {/* Connection Banner when Disconnected */}
         {connectionMode === 'disconnected' && (
           <BleConnectPrompt
             onConnectBLE={handleConnectBLE}
+            onConnectSerial={handleConnectSerial}
             onEnableSimulator={handleEnableSimulator}
           />
         )}
@@ -470,14 +500,14 @@ export const App: React.FC = () => {
           onReset={() => handleSelectPreset(SIMULATOR_PRESETS[0])}
         />
 
-        {/* 2. Overall Water Quality Banner (PRD Section 16) */}
+        {/* 2. Overall Water Quality Banner */}
         <OverallStatusCard
           status={sensorStatus}
           lastUpdated={lastUpdated}
           species={farmProfile.fishSpecies}
         />
 
-        {/* 3. Sensor Metrics Cards Grid (Water Temp, pH, Turbidity, DHT11 Air Temp & Humidity) */}
+        {/* 3. Sensor Metrics Cards Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <SensorCard
             type="temperature"
@@ -521,14 +551,14 @@ export const App: React.FC = () => {
           />
         </div>
 
-        {/* 4. Dual Relay Pump Controller (Aerator Pump 1 & Freshwater Pump 2) */}
+        {/* 4. Dual Relay Pump Controller */}
         <PumpControlCard
           pump1Active={Boolean(waterQuality.pump1 || sensorStatus.pump1)}
           pump2Active={Boolean(waterQuality.pump2 || sensorStatus.pump2)}
-          isConnected={connectionMode === 'ble'}
+          isConnected={isHardwareConnected}
         />
 
-        {/* 5. Gemini Fish-Culture Assistant Card (PRD Section 5) */}
+        {/* 5. Gemini Fish-Culture Assistant Card */}
         <GeminiAssistantCard
           advice={currentAdvice}
           isLoading={isAnalyzing}
@@ -543,13 +573,13 @@ export const App: React.FC = () => {
           triggerNotification={triggerNotification}
         />
 
-        {/* 6. Water Quality Time Series Chart (PRD Section 16) */}
+        {/* 6. Water Quality Time Series Chart */}
         <WaterQualityChart
           data={telemetryHistory}
           farmProfile={farmProfile}
         />
 
-        {/* 7. AI History Table (PRD Section 15) */}
+        {/* 7. AI History Table */}
         <AiHistoryTable
           history={adviceHistory}
           onClearHistory={handleClearHistory}
@@ -559,12 +589,12 @@ export const App: React.FC = () => {
           }}
         />
 
-        {/* Hardware & BLE Guide Quick Tip */}
+        {/* Hardware & Connect Quick Tip */}
         <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 text-xs text-slate-400 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <Terminal className="w-4 h-4 text-cyan-400 shrink-0" />
             <span>
-              Arduino Uno + HM-10 Firmware ready in <code className="font-mono text-cyan-300">firmware/AquaSentinel_ArduinoUno/</code>. Connects directly via Chrome Web Bluetooth.
+              Supports <strong>HC-05 (via Web Serial COM)</strong>, <strong>HM-10 (BLE)</strong>, and <strong>Direct USB</strong>. Firmware in <code className="font-mono text-cyan-300">firmware/AquaSentinel_ArduinoUno/</code>.
             </span>
           </div>
           <button

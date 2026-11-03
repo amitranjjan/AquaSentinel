@@ -1,17 +1,21 @@
 import React from 'react';
-import { Bluetooth, AlertCircle, WifiOff, Sparkles } from 'lucide-react';
+import { Bluetooth, Cable, AlertCircle, WifiOff, Sparkles, Info } from 'lucide-react';
 import { isWebBluetoothSupported } from '../services/bleService';
+import { isWebSerialSupported } from '../services/serialService';
 
 interface BleConnectPromptProps {
   onConnectBLE: () => void;
+  onConnectSerial: () => void;
   onEnableSimulator: () => void;
 }
 
 export const BleConnectPrompt: React.FC<BleConnectPromptProps> = ({
   onConnectBLE,
+  onConnectSerial,
   onEnableSimulator
 }) => {
-  const isSupported = isWebBluetoothSupported();
+  const isBleSupported = isWebBluetoothSupported();
+  const isSerialSupported = isWebSerialSupported();
 
   return (
     <div className="rounded-3xl border-2 border-dashed border-cyan-500/40 bg-gradient-to-b from-slate-900/95 via-slate-900/90 to-cyan-950/20 shadow-2xl p-6 lg:p-10 text-center relative overflow-hidden my-4">
@@ -19,7 +23,7 @@ export const BleConnectPrompt: React.FC<BleConnectPromptProps> = ({
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="max-w-2xl mx-auto space-y-6 relative z-10">
-        {/* Pulsing Bluetooth Icon */}
+        {/* Pulsing Bluetooth / Serial Icon */}
         <div className="relative inline-flex items-center justify-center">
           <div className="w-20 h-20 rounded-3xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-xl shadow-cyan-500/20">
             <Bluetooth className="w-10 h-10 animate-pulse text-cyan-400" />
@@ -36,61 +40,55 @@ export const BleConnectPrompt: React.FC<BleConnectPromptProps> = ({
             AquaSentinel Node Required
           </h2>
           <p className="mt-2 text-sm text-slate-300 leading-relaxed max-w-lg mx-auto">
-            The web dashboard operates in real time <span className="text-cyan-400 font-semibold">only when connected to your AquaSentinel hardware (Arduino Uno + HM-10, ESP8266, or ESP32) via Bluetooth Low Energy (BLE)</span>.
+            The web dashboard operates in real time when connected to your <span className="text-cyan-400 font-semibold">Arduino Uno (HC-05 or HM-10)</span>, <span className="text-cyan-400 font-semibold">ESP8266</span>, or <span className="text-cyan-400 font-semibold">ESP32</span>.
           </p>
         </div>
 
-        {/* Step-by-step guidance cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left text-xs">
-          <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800">
-            <div className="font-bold text-cyan-400 mb-1 flex items-center gap-1.5">
-              <span className="w-4 h-4 rounded-full bg-cyan-900 flex items-center justify-center text-[10px] font-mono text-cyan-200">1</span>
-              Power Node
-            </div>
-            <p className="text-slate-400 text-[11px]">
-              Turn on your Arduino Uno (with HM-10, DHT11, sensors & relays) near your computer.
-            </p>
+        {/* Important notice explaining HC-05 Classic Bluetooth vs BLE */}
+        <div className="p-4 rounded-2xl bg-slate-950/80 border border-cyan-500/30 text-left text-xs text-slate-300 space-y-2">
+          <div className="flex items-center gap-2 font-bold text-cyan-400 text-sm">
+            <Info className="w-4 h-4 shrink-0" />
+            <span>Using the HC-05 Bluetooth Module?</span>
           </div>
-
-          <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800">
-            <div className="font-bold text-cyan-400 mb-1 flex items-center gap-1.5">
-              <span className="w-4 h-4 rounded-full bg-cyan-900 flex items-center justify-center text-[10px] font-mono text-cyan-200">2</span>
-              Pair Device
-            </div>
-            <p className="text-slate-400 text-[11px]">
-              Click Connect and select your BLE module (<span className="font-mono text-slate-200">HM-10 / AT-09 / AquaSentinel</span>) in the browser prompt.
-            </p>
-          </div>
-
-          <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800">
-            <div className="font-bold text-cyan-400 mb-1 flex items-center gap-1.5">
-              <span className="w-4 h-4 rounded-full bg-cyan-900 flex items-center justify-center text-[10px] font-mono text-cyan-200">3</span>
-              Live AI & Pumps
-            </div>
-            <p className="text-slate-400 text-[11px]">
-              5 sensors stream live data, Gemini analyzes fish health, and you can control both pumps!
-            </p>
-          </div>
+          <p className="leading-relaxed text-slate-300">
+            <strong>HC-05 uses Classic Bluetooth 2.0 (SPP)</strong>, while standard Web Bluetooth only scans for Bluetooth Low Energy (BLE 4.0 / HM-10). To connect your HC-05:
+          </p>
+          <ol className="list-decimal list-inside space-y-1 text-slate-400 pl-1 text-[11px]">
+            <li>Open <strong className="text-white">Windows Settings &rarr; Bluetooth &amp; Devices</strong> and pair your <strong>HC-05</strong> (PIN: <code className="text-cyan-300">1234</code> or <code className="text-cyan-300">0000</code>).</li>
+            <li>Click the <strong className="text-white">"Connect HC-05 Bluetooth / USB"</strong> button below.</li>
+            <li>Select the paired <strong>Bluetooth Standard Serial COM port</strong> from the popup!</li>
+          </ol>
         </div>
 
-        {/* Primary Action Button */}
+        {/* Primary Action Buttons */}
         <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+          {/* Button 1: Web Serial for HC-05 Bluetooth & USB */}
+          <button
+            onClick={onConnectSerial}
+            disabled={!isSerialSupported}
+            className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-2.5 transition-all transform active:scale-95 disabled:opacity-50"
+          >
+            <Cable className="w-5 h-5" />
+            <span>Connect HC-05 Bluetooth / USB Serial</span>
+          </button>
+
+          {/* Button 2: Web Bluetooth for HM-10 / ESP32 */}
           <button
             onClick={onConnectBLE}
-            disabled={!isSupported}
-            className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-sm shadow-xl shadow-cyan-600/30 flex items-center justify-center gap-2.5 transition-all transform active:scale-95 disabled:opacity-50"
+            disabled={!isBleSupported}
+            className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold text-xs flex items-center justify-center gap-2 transition-all transform active:scale-95 disabled:opacity-50"
           >
-            <Bluetooth className="w-5 h-5" />
-            <span>Connect AquaSentinel BLE Device</span>
+            <Bluetooth className="w-4 h-4 text-cyan-400" />
+            <span>Connect BLE (HM-10 / ESP32)</span>
           </button>
         </div>
 
         {/* Browser compatibility check */}
-        {!isSupported && (
+        {(!isSerialSupported && !isBleSupported) && (
           <div className="p-3 rounded-xl bg-amber-950/60 border border-amber-600/50 text-amber-200 text-xs flex items-center gap-2 justify-center">
             <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
             <span>
-              Web Bluetooth is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Opera on Windows, Mac, Linux, or Android.
+              Web Serial and Web Bluetooth require Google Chrome, Microsoft Edge, or Opera on Windows, Mac, or Linux.
             </span>
           </div>
         )}
@@ -99,7 +97,7 @@ export const BleConnectPrompt: React.FC<BleConnectPromptProps> = ({
         <div className="pt-4 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500">
           <span className="flex items-center gap-1.5">
             <WifiOff className="w-3.5 h-3.5" />
-            <span>Waiting for BLE advertisement...</span>
+            <span>Waiting for connection...</span>
           </span>
           <button
             onClick={onEnableSimulator}

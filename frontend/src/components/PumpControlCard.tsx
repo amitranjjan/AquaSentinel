@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Waves, Droplets, Power, ShieldAlert, Cpu } from 'lucide-react';
 import { sendBLECommand } from '../services/bleService';
+import { sendSerialCommand } from '../services/serialService';
 
 interface PumpControlCardProps {
   pump1Active?: boolean;
@@ -27,13 +28,20 @@ export const PumpControlCard: React.FC<PumpControlCardProps> = ({
     setLocalP2(pump2Active);
   }, [pump2Active]);
 
+  const dispatchCommand = async (cmd: string) => {
+    const bleSuccess = await sendBLECommand(cmd);
+    if (!bleSuccess) {
+      await sendSerialCommand(cmd);
+    }
+  };
+
   const togglePump1 = async () => {
     if (!isConnected || sending) return;
     const nextState = !localP1;
     setSending(true);
     setLocalP1(nextState);
     setAutoMode(false);
-    await sendBLECommand(nextState ? 'P1_ON' : 'P1_OFF');
+    await dispatchCommand(nextState ? 'P1_ON' : 'P1_OFF');
     setSending(false);
   };
 
@@ -43,7 +51,7 @@ export const PumpControlCard: React.FC<PumpControlCardProps> = ({
     setSending(true);
     setLocalP2(nextState);
     setAutoMode(false);
-    await sendBLECommand(nextState ? 'P2_ON' : 'P2_OFF');
+    await dispatchCommand(nextState ? 'P2_ON' : 'P2_OFF');
     setSending(false);
   };
 
@@ -51,7 +59,7 @@ export const PumpControlCard: React.FC<PumpControlCardProps> = ({
     if (!isConnected || sending) return;
     setSending(true);
     setAutoMode(true);
-    await sendBLECommand('AUTO_ON');
+    await dispatchCommand('AUTO_ON');
     setSending(false);
   };
 
