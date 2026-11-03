@@ -1,17 +1,19 @@
 import React from 'react';
-import { ShieldCheck, AlertTriangle, AlertOctagon, HelpCircle, BellRing, Sparkles } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, AlertOctagon, HelpCircle, Radio } from 'lucide-react';
 import type { OverallStatusCode, SensorStatus } from '../types';
 
 interface OverallStatusCardProps {
   status: SensorStatus;
   lastUpdated: string;
   species: string;
+  connectionMode?: 'ble' | 'serial' | 'simulator' | 'disconnected';
 }
 
 export const OverallStatusCard: React.FC<OverallStatusCardProps> = ({
   status,
   lastUpdated,
-  species
+  species,
+  connectionMode = 'disconnected'
 }) => {
   const getOverallDetails = (code: OverallStatusCode) => {
     switch (code) {
@@ -58,9 +60,27 @@ export const OverallStatusCard: React.FC<OverallStatusCardProps> = ({
         };
       case 'DISCONNECTED':
       default:
+        if (connectionMode === 'serial') {
+          return {
+            label: 'SERIAL PORT OPEN — AWAITING SENSOR DATA',
+            description: `Serial port linked! Listening for JSON telemetry stream from Arduino Uno...`,
+            bg: 'from-teal-950/70 to-slate-900 border-teal-500/50 text-teal-300',
+            icon: <Radio className="w-8 h-8 text-teal-400 animate-pulse" />,
+            badgeBg: 'bg-teal-500/30 text-teal-200 border-teal-500/60'
+          };
+        }
+        if (connectionMode === 'ble') {
+          return {
+            label: 'BLE LINKED — AWAITING TELEMETRY',
+            description: `Bluetooth Low Energy linked! Waiting for first telemetry notification packet...`,
+            bg: 'from-cyan-950/70 to-slate-900 border-cyan-500/50 text-cyan-300',
+            icon: <Radio className="w-8 h-8 text-cyan-400 animate-pulse" />,
+            badgeBg: 'bg-cyan-500/30 text-cyan-200 border-cyan-500/60'
+          };
+        }
         return {
           label: 'DEVICE DISCONNECTED',
-          description: `Awaiting Bluetooth Low Energy (BLE) connection from AquaSentinel ESP32 node.`,
+          description: `Click 'Connect HC-05 Bluetooth / USB Serial' to connect your Arduino Uno.`,
           bg: 'from-slate-950 to-slate-900 border-slate-700 text-slate-400',
           icon: <HelpCircle className="w-8 h-8 text-slate-500" />,
           badgeBg: 'bg-slate-800 text-slate-300 border-slate-700'
@@ -87,29 +107,22 @@ export const OverallStatusCard: React.FC<OverallStatusCardProps> = ({
                 {details.label}
               </span>
             </div>
-            <p className="text-sm font-medium text-slate-200 mt-1">
+            <p className="mt-1 text-sm font-medium leading-relaxed">
               {details.description}
             </p>
           </div>
         </div>
 
-        {/* Right Side: Buzzer State & Timestamp */}
-        <div className="flex items-center gap-4 self-end md:self-center">
-          {status.buzzer ? (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-900/60 border border-red-500/50 text-red-200 text-xs font-semibold animate-pulse">
-              <BellRing className="w-4 h-4 text-red-400" />
-              <span>Pond Buzzer Active</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700/50 text-slate-400 text-xs">
-              <Sparkles className="w-3.5 h-3.5 text-slate-400" />
-              <span>Buzzer Silent</span>
-            </div>
-          )}
-
-          <div className="text-right text-xs text-slate-400 border-l border-slate-800 pl-3">
-            <div>Last Updated:</div>
-            <div className="font-mono text-slate-300 font-semibold">{lastUpdated}</div>
+        {/* Right Side: Species & Time Badge */}
+        <div className="flex items-center gap-3 self-end md:self-center shrink-0">
+          <div className="text-right">
+            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Cultured Stock</p>
+            <p className="text-sm font-bold text-white font-mono">{species}</p>
+          </div>
+          <div className="h-8 w-px bg-slate-800" />
+          <div className="text-right">
+            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Last Telemetry</p>
+            <p className="text-sm font-bold text-slate-200 font-mono">{lastUpdated}</p>
           </div>
         </div>
       </div>

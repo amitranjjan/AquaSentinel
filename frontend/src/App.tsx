@@ -505,7 +505,29 @@ export const App: React.FC = () => {
           status={sensorStatus}
           lastUpdated={lastUpdated}
           species={farmProfile.fishSpecies}
+          connectionMode={connectionMode}
         />
+
+        {/* Diagnostic Helper Banner for Serial / HC-05 */}
+        {connectionMode === 'serial' && sensorStatus.overall === 'DISCONNECTED' && (
+          <div className="p-4 rounded-2xl bg-cyan-950/40 border border-cyan-500/40 text-xs text-slate-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-pulse">
+            <div>
+              <p className="font-bold text-cyan-300 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                Serial Port Connected &mdash; Awaiting First Telemetry Packet
+              </p>
+              <p className="text-slate-400 text-[11px] mt-0.5">
+                Windows creates 2 Bluetooth ports for HC-05 (<strong>Outgoing</strong> and <strong>Incoming</strong>). If no readings appear within 5 seconds, click <strong>Disconnect</strong> and select the other COM port from the prompt.
+              </p>
+            </div>
+            <button
+              onClick={handleDisconnect}
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold shrink-0 text-[11px]"
+            >
+              Switch COM Port
+            </button>
+          </div>
+        )}
 
         {/* 3. Sensor Metrics Cards Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
