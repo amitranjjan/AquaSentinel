@@ -74,6 +74,8 @@ export function computeStatuses(
   let tStatus: SensorStatusCode = 'NORMAL';
   let pStatus: SensorStatusCode = 'NORMAL';
   let tbStatus: SensorStatusCode = 'NORMAL';
+  let atStatus: SensorStatusCode = 'NORMAL';
+  let hStatus: SensorStatusCode = 'NORMAL';
 
   if (wq.temperature === null || isNaN(wq.temperature)) {
     tStatus = 'SENSOR_ERROR';
@@ -93,8 +95,20 @@ export function computeStatuses(
 
   if (wq.turbidity === null || isNaN(wq.turbidity)) {
     tbStatus = 'SENSOR_ERROR';
-  } else if (wq.turbidity > 75.0) {
+  } else if (wq.turbidity > 50.0) {
     tbStatus = 'HIGH';
+  }
+
+  if (wq.airTemperature !== undefined && wq.airTemperature !== null) {
+    if (isNaN(wq.airTemperature)) atStatus = 'SENSOR_ERROR';
+    else if (wq.airTemperature < 18.0) atStatus = 'LOW';
+    else if (wq.airTemperature > 38.0) atStatus = 'HIGH';
+  }
+
+  if (wq.humidity !== undefined && wq.humidity !== null) {
+    if (isNaN(wq.humidity)) hStatus = 'SENSOR_ERROR';
+    else if (wq.humidity < 40.0) hStatus = 'LOW';
+    else if (wq.humidity > 85.0) hStatus = 'HIGH';
   }
 
   let overall: OverallStatusCode = 'NORMAL';
@@ -106,7 +120,13 @@ export function computeStatuses(
   if (hasFault) {
     overall = 'SENSOR_ERROR';
     buzzer = true;
-  } else if ((tStatus === 'HIGH' && pStatus === 'HIGH') || (pStatus === 'LOW' && wq.ph! < 5.8) || (wq.temperature! > 34.0)) {
+  } else if (
+    (tStatus === 'HIGH' && pStatus === 'HIGH') ||
+    (pStatus === 'LOW' && wq.ph! < 5.8) ||
+    (pStatus === 'HIGH' && wq.ph! > 9.0) ||
+    (wq.temperature !== null && wq.temperature > 34.0) ||
+    (wq.turbidity !== null && wq.turbidity > 80.0)
+  ) {
     overall = 'CRITICAL';
     buzzer = true;
   } else if (hasAbnormal) {
@@ -121,8 +141,12 @@ export function computeStatuses(
     temperature: tStatus,
     ph: pStatus,
     turbidity: tbStatus,
+    airTemperature: atStatus,
+    humidity: hStatus,
     overall,
-    buzzer
+    buzzer,
+    pump1: wq.pump1,
+    pump2: wq.pump2
   };
 }
 

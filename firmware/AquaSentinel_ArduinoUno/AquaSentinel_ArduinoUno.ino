@@ -15,13 +15,14 @@
  *      * Relay 2 -> Pump 2 (Freshwater Flushing / Drainage Pump) on Digital Pin 8
  *  - Optional Audio Alert: Active Buzzer on Digital Pin 6
  *
- * Communication:
- *  - Works with AquaSentinel Web Dashboard via:
- *      1. Bluetooth HC-05 (Paired in Windows -> Web Serial COM)
- *      2. Direct USB Cable (Web Serial COM)
- *      3. HM-10 / AT-09 (Web Bluetooth BLE)
- *  - Broadcasts structured JSON telemetry every 2 seconds terminated with '\n'
- *  - Accepts remote commands: "P1_ON", "P1_OFF", "P2_ON", "P2_OFF", "AUTO_ON", "AUTO_OFF"
+ * Manual & Automated Pump Control:
+ *  - Accepts manual commands from Web Dashboard:
+ *      "P1_ON"  --> Turns Pump 1 ON (locks manual mode)
+ *      "P1_OFF" --> Turns Pump 1 OFF (locks manual mode)
+ *      "P2_ON"  --> Turns Pump 2 ON (locks manual mode)
+ *      "P2_OFF" --> Turns Pump 2 OFF (locks manual mode)
+ *      "AUTO_ON"--> Re-enables automated threshold control
+ *      "RELAY_HIGH" / "RELAY_LOW" --> Toggles active-high vs active-low relay logic
  */
 
 #include <SoftwareSerial.h>
@@ -41,10 +42,8 @@
 #define PH_ANALOG_PIN    A0   // Analog Pin A0 for pH sensor
 #define TURB_ANALOG_PIN  A1   // Analog Pin A1 for Turbidity sensor
 
-// ================= RELAY CONFIGURATION =================
-// Most 5V Arduino relay modules are ACTIVE-LOW (LOW = ON, HIGH = OFF)
-#define RELAY_ON   LOW
-#define RELAY_OFF  HIGH
+// Relay polarity configuration (default true for standard active-low relay boards)
+bool relayActiveLow = true;
 
 // ================= SENSOR OBJECTS =================
 SoftwareSerial bleSerial(BLE_RX_PIN, BLE_TX_PIN); // RX, TX for Bluetooth
@@ -66,15 +65,19 @@ float humidity = 65.0;
 float phValue = 7.2;
 float turbidityValue = 25.0;
 
-bool pump1Active = false; // Aerator Pump
-bool pump2Active = false; // Fresh Water Pump
-bool autoControl = true;  // Automated relay triggers based on water quality
+bool pump1Active = false; // Aerator Pump state
+bool pump2Active = false; // Fresh Water Pump state
+bool autoControl = false; // Default manual control so farmer has full authority
 bool buzzerState = false;
+
+// Command string buffers
+String bleCmdBuffer = "";
+String usbCmdBuffer = "";
 
 unsigned long lastTelemetryTime = 0;
 const unsigned long TELEMETRY_INTERVAL_MS = 2000; // Broadcast every 2s
 
-// Analog sample smoothing (reduces ADC electrical jitter)
+// Analog sample smoothing (reduces electrical noise)
 float readAverageAnalog(uint8_t pin, uint8_t samples = 10) {
   long sum = 0;
   for (uint8_t i = 0; i < samples; i++) {
@@ -87,7 +90,6 @@ float readAverageAnalog(uint8_t pin, uint8_t samples = 10) {
 // Convert A0 voltage to pH
 float calculatePH(float voltage) {
   // Standard pH sensor formula: pH = 7.0 + ((2.5 - V) * slope)
-  // At neutral pH 7.0, output is typically ~2.5V
   float ph = 7.0 + (2.50 - voltage) * 3.5;
   if (ph < 0.0) ph = 0.0;
   if (ph > 14.0) ph = 14.0;
@@ -96,10 +98,8 @@ float calculatePH(float voltage) {
 
 // Convert A1 voltage to Turbidity (NTU)
 float calculateTurbidity(float voltage) {
-  // Typical turbidity formula: clean water > 4.0V, dirty water < 2.5V
   if (voltage >= 4.0) return 10.0;
   if (voltage < 2.5) return 95.0;
-  // Linear approximation: 4.0V = 10 NTU, 2.5V = 95 NTU
   float ntu = 10.0 + (4.0 - voltage) * 56.6;
   if (ntu < 0.0) ntu = 0.0;
   return ntu;
@@ -107,12 +107,18 @@ float calculateTurbidity(float voltage) {
 
 void setPump1(bool state) {
   pump1Active = state;
-  digitalWrite(RELAY_PUMP1_PIN, state ? RELAY_ON : RELAY_OFF);
+  int pinState = relayActiveLow ? (state ? LOW : HIGH) : (state ? HIGH : LOW);
+  digitalWrite(RELAY_PUMP1_PIN, pinState);
+  Serial.print(F("[Pump 1] Set to: "));
+  Serial.println(state ? F("ON") : F("OFF"));
 }
 
 void setPump2(bool state) {
   pump2Active = state;
-  digitalWrite(RELAY_PUMP2_PIN, state ? RELAY_ON : RELAY_OFF);
+  int pinState = relayActiveLow ? (state ? LOW : HIGH) : (state ? HIGH : LOW);
+  digitalWrite(RELAY_PUMP2_PIN, pinState);
+  Serial.print(F("[Pump 2] Set to: "));
+  Serial.println(state ? F("ON") : F("OFF"));
 }
 
 // Process incoming commands from either Bluetooth (HC-05) or USB Serial
@@ -124,22 +130,64 @@ void processCommand(String cmd) {
   Serial.print(F("[Command Received]: "));
   Serial.println(cmd);
 
-  if (cmd == "P1_ON") {
+  if (cmd == "P1_ON" || cmd == "1" || cmd == "PUMP1_ON") {
+    autoControl = false; // Disable auto override so manual button always works!
     setPump1(true);
-    autoControl = false; // Manual override
-  } else if (cmd == "P1_OFF") {
+  } else if (cmd == "P1_OFF" || cmd == "0" || cmd == "PUMP1_OFF") {
+    autoControl = false;
     setPump1(false);
+  } else if (cmd == "P2_ON" || cmd == "2" || cmd == "PUMP2_ON") {
     autoControl = false;
-  } else if (cmd == "P2_ON") {
     setPump2(true);
+  } else if (cmd == "P2_OFF" || cmd == "PUMP2_OFF") {
     autoControl = false;
-  } else if (cmd == "P2_OFF") {
     setPump2(false);
-    autoControl = false;
-  } else if (cmd == "AUTO_ON") {
+  } else if (cmd == "AUTO_ON" || cmd == "AUTO") {
     autoControl = true;
-  } else if (cmd == "AUTO_OFF") {
+    Serial.println(F("[Mode] Auto Threshold Control ENABLED"));
+  } else if (cmd == "AUTO_OFF" || cmd == "MANUAL") {
     autoControl = false;
+    Serial.println(F("[Mode] Manual Mode ENABLED"));
+  } else if (cmd == "RELAY_HIGH") {
+    relayActiveLow = false;
+    setPump1(pump1Active);
+    setPump2(pump2Active);
+    Serial.println(F("[Relay] Polarity: Active-HIGH"));
+  } else if (cmd == "RELAY_LOW") {
+    relayActiveLow = true;
+    setPump1(pump1Active);
+    setPump2(pump2Active);
+    Serial.println(F("[Relay] Polarity: Active-LOW"));
+  }
+}
+
+void checkIncomingCommands() {
+  // Read non-blocking from Bluetooth (HC-05)
+  while (bleSerial.available()) {
+    char c = (char)bleSerial.read();
+    if (c == '\n' || c == '\r') {
+      if (bleCmdBuffer.length() > 0) {
+        processCommand(bleCmdBuffer);
+        bleCmdBuffer = "";
+      }
+    } else {
+      bleCmdBuffer += c;
+      if (bleCmdBuffer.length() > 30) bleCmdBuffer = "";
+    }
+  }
+
+  // Read non-blocking from USB Serial
+  while (Serial.available()) {
+    char c = (char)Serial.read();
+    if (c == '\n' || c == '\r') {
+      if (usbCmdBuffer.length() > 0) {
+        processCommand(usbCmdBuffer);
+        usbCmdBuffer = "";
+      }
+    } else {
+      usbCmdBuffer += c;
+      if (usbCmdBuffer.length() > 30) usbCmdBuffer = "";
+    }
   }
 }
 
@@ -149,52 +197,42 @@ void setup() {
   pinMode(RELAY_PUMP2_PIN, OUTPUT);
   pinMode(BUZZER_PIN, OUTPUT);
 
-  // Initial relay state (OFF for active-low modules)
-  digitalWrite(RELAY_PUMP1_PIN, RELAY_OFF);
-  digitalWrite(RELAY_PUMP2_PIN, RELAY_OFF);
+  // Initial relay state (OFF)
+  setPump1(false);
+  setPump2(false);
   digitalWrite(BUZZER_PIN, LOW);
 
   // USB Hardware Serial
   Serial.begin(9600);
-  Serial.setTimeout(80); // Fast non-blocking serial read
-  delay(300);
+  delay(200);
 
   Serial.println(F("\n============================================"));
   Serial.println(F("AquaSentinel Arduino Uno + Bluetooth Node"));
-  Serial.println(F("Hardware: DHT11 + DS18B20 + pH + Turbidity + 2 Relays"));
+  Serial.println(F("Relays: Pin 7 (Pump 1) & Pin 8 (Pump 2)"));
+  Serial.println(F("Bluetooth: Pin 2 (RX) & Pin 3 (TX)"));
   Serial.println(F("============================================"));
 
   // Bluetooth Serial (HC-05 default baud rate is 9600)
   bleSerial.begin(9600);
-  bleSerial.setTimeout(80);
 
   // Initialize Sensors
   waterTempSensor.begin();
   waterTempSensor.setResolution(10);
   dht.begin();
 
-  // Startup audio confirmation
+  // Startup beep
   digitalWrite(BUZZER_PIN, HIGH);
-  delay(120);
+  delay(100);
   digitalWrite(BUZZER_PIN, LOW);
 
-  Serial.println(F("[AquaSentinel] Ready and listening on Bluetooth & USB Serial."));
+  Serial.println(F("[AquaSentinel] Ready and listening for commands."));
 }
 
 void loop() {
-  // 1. Check for incoming commands from Bluetooth (HC-05)
-  if (bleSerial.available()) {
-    String cmd = bleSerial.readStringUntil('\n');
-    processCommand(cmd);
-  }
+  // 1. Process incoming commands continuously without blocking
+  checkIncomingCommands();
 
-  // 2. Check for incoming commands from USB Serial (Direct cable)
-  if (Serial.available()) {
-    String cmd = Serial.readStringUntil('\n');
-    processCommand(cmd);
-  }
-
-  // 3. Periodic sensor sampling & broadcast every 2000ms
+  // 2. Periodic sensor sampling & broadcast every 2000ms
   unsigned long now = millis();
   if (now - lastTelemetryTime >= TELEMETRY_INTERVAL_MS) {
     lastTelemetryTime = now;
@@ -202,7 +240,6 @@ void loop() {
     // Read DS18B20 Water Temperature
     waterTempSensor.requestTemperatures();
     float wt = waterTempSensor.getTempCByIndex(0);
-    // Ignore error codes (-127 = disconnected probe, 85 = power-on reset state)
     if (wt > -50.0 && wt < 85.0) {
       waterTemp = wt;
     }
@@ -223,22 +260,23 @@ void loop() {
     float a1Volt = (a1Raw / 1023.0) * 5.0;
     turbidityValue = calculateTurbidity(a1Volt);
 
-    // Determine status & warnings
-    String overallStatus = "NORMAL";
-    bool tempWarning = (waterTemp < WATER_TEMP_MIN || waterTemp > WATER_TEMP_MAX);
-    bool phWarning = (phValue < PH_MIN || phValue > PH_MAX);
-    bool turbWarning = (turbidityValue > TURBIDITY_MAX);
+    // Determine individual parameter statuses
+    String tempStatus = (waterTemp < WATER_TEMP_MIN) ? "LOW" : ((waterTemp > WATER_TEMP_MAX) ? "HIGH" : "NORMAL");
+    String phStatus = (phValue < PH_MIN) ? "LOW" : ((phValue > PH_MAX) ? "HIGH" : "NORMAL");
+    String turbStatus = (turbidityValue > TURBIDITY_MAX) ? "HIGH" : "NORMAL";
 
-    if (waterTemp > 33.0 || phValue < 6.0 || phValue > 9.0 || turbidityValue > 80.0) {
-      overallStatus = "DANGER";
-    } else if (tempWarning || phWarning || turbWarning) {
+    // Overall Status
+    String overallStatus = "NORMAL";
+    if (phValue < 6.0 || phValue > 9.0 || waterTemp > 33.0 || turbidityValue > 80.0) {
+      overallStatus = "CRITICAL";
+    } else if (tempStatus != "NORMAL" || phStatus != "NORMAL" || turbStatus != "NORMAL") {
       overallStatus = "WARNING";
     }
 
-    // Automated Relay Control Logic (if Auto Mode is Active)
+    // Automated Relay Control Logic (ONLY if Auto Mode is Active)
     if (autoControl) {
       // Pump 1 (Aerator): Turn ON if water is too warm (>30°C) or turbid (>50 NTU)
-      if (waterTemp >= 30.0 || turbidityValue >= 50.0 || overallStatus == "DANGER") {
+      if (waterTemp >= 30.0 || turbidityValue >= 50.0 || overallStatus == "CRITICAL") {
         setPump1(true);
       } else {
         setPump1(false);
@@ -253,18 +291,22 @@ void loop() {
     }
 
     // Buzzer on Danger
-    buzzerState = (overallStatus == "DANGER");
+    buzzerState = (overallStatus == "CRITICAL");
     digitalWrite(BUZZER_PIN, buzzerState ? HIGH : LOW);
 
-    // Construct concise JSON line terminated with '\n'
+    // Construct JSON line with full status fields
     String json = "{\"waterTemp\":" + String(waterTemp, 1) +
                   ",\"temperature\":" + String(waterTemp, 1) +
                   ",\"airTemp\":" + String(airTemp, 1) +
                   ",\"humidity\":" + String(humidity, 0) +
                   ",\"ph\":" + String(phValue, 2) +
                   ",\"turbidity\":" + String(turbidityValue, 1) +
+                  ",\"temperatureStatus\":\"" + tempStatus + "\"" +
+                  ",\"phStatus\":\"" + phStatus + "\"" +
+                  ",\"turbidityStatus\":\"" + turbStatus + "\"" +
                   ",\"pump1\":" + (pump1Active ? "1" : "0") +
                   ",\"pump2\":" + (pump2Active ? "1" : "0") +
+                  ",\"autoMode\":" + (autoControl ? "1" : "0") +
                   ",\"overallStatus\":\"" + overallStatus + "\"" +
                   ",\"buzzer\":" + (buzzerState ? "1" : "0") + "}\n";
 

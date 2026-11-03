@@ -298,9 +298,17 @@ export const App: React.FC = () => {
     try {
       const devName = await requestAndConnectBLE(
         (data) => {
+          const computed = computeStatuses(data.waterQuality, farmProfile.fishSpecies);
+          const dynamicStatus: SensorStatus = {
+            ...computed,
+            airTemperature: data.status.airTemperature ?? computed.airTemperature ?? 'NORMAL',
+            humidity: data.status.humidity ?? computed.humidity ?? 'NORMAL',
+            pump1: data.waterQuality.pump1,
+            pump2: data.waterQuality.pump2
+          };
           setWaterQuality(data.waterQuality);
-          setSensorStatus(data.status);
-          recordTelemetryPoint(data.waterQuality, data.status);
+          setSensorStatus(dynamicStatus);
+          recordTelemetryPoint(data.waterQuality, dynamicStatus);
 
           if (!hasRequestedFirstAdviceRef.current && (data.waterQuality.temperature !== null || data.waterQuality.ph !== null)) {
             hasRequestedFirstAdviceRef.current = true;
@@ -334,9 +342,17 @@ export const App: React.FC = () => {
     try {
       const portLabel = await requestAndConnectSerial(
         (data) => {
+          const computed = computeStatuses(data.waterQuality, farmProfile.fishSpecies);
+          const dynamicStatus: SensorStatus = {
+            ...computed,
+            airTemperature: data.status.airTemperature ?? computed.airTemperature ?? 'NORMAL',
+            humidity: data.status.humidity ?? computed.humidity ?? 'NORMAL',
+            pump1: data.waterQuality.pump1,
+            pump2: data.waterQuality.pump2
+          };
           setWaterQuality(data.waterQuality);
-          setSensorStatus(data.status);
-          recordTelemetryPoint(data.waterQuality, data.status);
+          setSensorStatus(dynamicStatus);
+          recordTelemetryPoint(data.waterQuality, dynamicStatus);
 
           if (!hasRequestedFirstAdviceRef.current && (data.waterQuality.temperature !== null || data.waterQuality.ph !== null)) {
             hasRequestedFirstAdviceRef.current = true;
@@ -578,6 +594,7 @@ export const App: React.FC = () => {
           pump1Active={Boolean(waterQuality.pump1 || sensorStatus.pump1)}
           pump2Active={Boolean(waterQuality.pump2 || sensorStatus.pump2)}
           isConnected={isHardwareConnected}
+          connectionMode={connectionMode}
         />
 
         {/* 5. Gemini Fish-Culture Assistant Card */}

@@ -1,4 +1,4 @@
-import type { WaterQuality, SensorStatus } from '../types';
+import type { WaterQuality, SensorStatus, SensorStatusCode, OverallStatusCode } from '../types';
 
 export const BLE_SERVICE_UUID = '0000ffe0-0000-1000-8000-00805f9b34fb';
 export const BLE_CHARACTERISTIC_UUID = '0000ffe1-0000-1000-8000-00805f9b34fb';
@@ -18,6 +18,75 @@ export function isWebBluetoothSupported(): boolean {
   return typeof navigator !== 'undefined' && 'bluetooth' in navigator;
 }
 
+export function isBLEConnected(): boolean {
+  return activeDevice !== null && activeDevice.gatt?.connected;
+}
+
+function computeFallbackStatus(wq: WaterQuality, parsed: any): SensorStatus {
+  let tStatus: SensorStatusCode = parsed.temperatureStatus;
+  if (!tStatus) {
+    if (wq.temperature === null || isNaN(wq.temperature)) tStatus = 'DISCONNECTED';
+    else if (wq.temperature < 22) tStatus = 'LOW';
+    else if (wq.temperature > 32.5) tStatus = 'HIGH';
+    else tStatus = 'NORMAL';
+  }
+
+  let pStatus: SensorStatusCode = parsed.phStatus;
+  if (!pStatus) {
+    if (wq.ph === null || isNaN(wq.ph)) pStatus = 'DISCONNECTED';
+    else if (wq.ph < 6.5) pStatus = 'LOW';
+    else if (wq.ph > 8.5) pStatus = 'HIGH';
+    else pStatus = 'NORMAL';
+  }
+
+  let tbStatus: SensorStatusCode = parsed.turbidityStatus;
+  if (!tbStatus) {
+    if (wq.turbidity === null || isNaN(wq.turbidity)) tbStatus = 'DISCONNECTED';
+    else if (wq.turbidity > 50) tbStatus = 'HIGH';
+    else tbStatus = 'NORMAL';
+  }
+
+  let airTempStatus: SensorStatusCode = parsed.airTemperatureStatus || (
+    wq.airTemperature === null || wq.airTemperature === undefined || isNaN(wq.airTemperature) ? 'DISCONNECTED' :
+    wq.airTemperature > 38 ? 'HIGH' :
+    wq.airTemperature < 18 ? 'LOW' : 'NORMAL'
+  );
+
+  let humStatus: SensorStatusCode = parsed.humidityStatus || (
+    wq.humidity === null || wq.humidity === undefined || isNaN(wq.humidity) ? 'DISCONNECTED' :
+    wq.humidity > 85 ? 'HIGH' :
+    wq.humidity < 40 ? 'LOW' : 'NORMAL'
+  );
+
+  let overall: OverallStatusCode = parsed.overallStatus;
+  if (!overall) {
+    if (
+      (pStatus === 'HIGH' && (wq.ph ?? 0) > 9.0) ||
+      (pStatus === 'LOW' && (wq.ph ?? 14) < 6.0) ||
+      (tbStatus === 'HIGH' && (wq.turbidity ?? 0) > 80) ||
+      (tStatus === 'HIGH' && (wq.temperature ?? 0) > 34)
+    ) {
+      overall = 'CRITICAL';
+    } else if (pStatus !== 'NORMAL' || tbStatus !== 'NORMAL' || tStatus !== 'NORMAL') {
+      overall = 'WARNING';
+    } else {
+      overall = 'NORMAL';
+    }
+  }
+
+  return {
+    temperature: tStatus,
+    ph: pStatus,
+    turbidity: tbStatus,
+    airTemperature: airTempStatus,
+    humidity: humStatus,
+    overall,
+    buzzer: Boolean(Number(parsed.buzzer)) || overall === 'CRITICAL',
+    pump1: wq.pump1,
+    pump2: wq.pump2
+  };
+}
+
 function handleTelemetry(parsed: any, rawLine: string): BLETelemetryData {
   // Support both long and short key aliases for Arduino Uno / ESP8266 / ESP32
   const waterTemp = parsed.waterTemp !== undefined ? parsed.waterTemp : parsed.temperature;
@@ -28,27 +97,21 @@ function handleTelemetry(parsed: any, rawLine: string): BLETelemetryData {
   const p1 = parsed.pump1 !== undefined ? Boolean(Number(parsed.pump1)) : Boolean(Number(parsed.p1));
   const p2 = parsed.pump2 !== undefined ? Boolean(Number(parsed.pump2)) : Boolean(Number(parsed.p2));
 
+  const wq: WaterQuality = {
+    temperature: waterTemp !== undefined && waterTemp !== null ? Number(waterTemp) : null,
+    ph: ph !== undefined && ph !== null ? Number(ph) : null,
+    turbidity: turbidity !== undefined && turbidity !== null ? Number(turbidity) : null,
+    airTemperature: airTemp !== undefined && airTemp !== null ? Number(airTemp) : null,
+    humidity: humidity !== undefined && humidity !== null ? Number(humidity) : null,
+    pump1: p1,
+    pump2: p2
+  };
+
+  const status = computeFallbackStatus(wq, parsed);
+
   return {
-    waterQuality: {
-      temperature: waterTemp !== undefined && waterTemp !== null ? Number(waterTemp) : null,
-      ph: ph !== undefined && ph !== null ? Number(ph) : null,
-      turbidity: turbidity !== undefined && turbidity !== null ? Number(turbidity) : null,
-      airTemperature: airTemp !== undefined && airTemp !== null ? Number(airTemp) : null,
-      humidity: humidity !== undefined && humidity !== null ? Number(humidity) : null,
-      pump1: p1,
-      pump2: p2
-    },
-    status: {
-      temperature: parsed.temperatureStatus || 'NORMAL',
-      ph: parsed.phStatus || 'NORMAL',
-      turbidity: parsed.turbidityStatus || 'NORMAL',
-      airTemperature: parsed.airTemperatureStatus || 'NORMAL',
-      humidity: parsed.humidityStatus || 'NORMAL',
-      overall: parsed.overallStatus || parsed.status || 'NORMAL',
-      buzzer: Boolean(Number(parsed.buzzer)),
-      pump1: p1,
-      pump2: p2
-    },
+    waterQuality: wq,
+    status,
     rawJson: rawLine
   };
 }

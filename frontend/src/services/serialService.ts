@@ -1,4 +1,4 @@
-import type { WaterQuality, SensorStatus } from '../types';
+import type { WaterQuality, SensorStatus, SensorStatusCode, OverallStatusCode } from '../types';
 
 export interface SerialTelemetryData {
   waterQuality: WaterQuality;
@@ -16,6 +16,75 @@ export function isWebSerialSupported(): boolean {
   return typeof navigator !== 'undefined' && 'serial' in navigator;
 }
 
+export function isSerialConnected(): boolean {
+  return activePort !== null;
+}
+
+function computeFallbackStatus(wq: WaterQuality, parsed: any): SensorStatus {
+  let tStatus: SensorStatusCode = parsed.temperatureStatus;
+  if (!tStatus) {
+    if (wq.temperature === null || isNaN(wq.temperature)) tStatus = 'DISCONNECTED';
+    else if (wq.temperature < 22) tStatus = 'LOW';
+    else if (wq.temperature > 32.5) tStatus = 'HIGH';
+    else tStatus = 'NORMAL';
+  }
+
+  let pStatus: SensorStatusCode = parsed.phStatus;
+  if (!pStatus) {
+    if (wq.ph === null || isNaN(wq.ph)) pStatus = 'DISCONNECTED';
+    else if (wq.ph < 6.5) pStatus = 'LOW';
+    else if (wq.ph > 8.5) pStatus = 'HIGH';
+    else pStatus = 'NORMAL';
+  }
+
+  let tbStatus: SensorStatusCode = parsed.turbidityStatus;
+  if (!tbStatus) {
+    if (wq.turbidity === null || isNaN(wq.turbidity)) tbStatus = 'DISCONNECTED';
+    else if (wq.turbidity > 50) tbStatus = 'HIGH';
+    else tbStatus = 'NORMAL';
+  }
+
+  let airTempStatus: SensorStatusCode = parsed.airTemperatureStatus || (
+    wq.airTemperature === null || wq.airTemperature === undefined || isNaN(wq.airTemperature) ? 'DISCONNECTED' :
+    wq.airTemperature > 38 ? 'HIGH' :
+    wq.airTemperature < 18 ? 'LOW' : 'NORMAL'
+  );
+
+  let humStatus: SensorStatusCode = parsed.humidityStatus || (
+    wq.humidity === null || wq.humidity === undefined || isNaN(wq.humidity) ? 'DISCONNECTED' :
+    wq.humidity > 85 ? 'HIGH' :
+    wq.humidity < 40 ? 'LOW' : 'NORMAL'
+  );
+
+  let overall: OverallStatusCode = parsed.overallStatus;
+  if (!overall) {
+    if (
+      (pStatus === 'HIGH' && (wq.ph ?? 0) > 9.0) ||
+      (pStatus === 'LOW' && (wq.ph ?? 14) < 6.0) ||
+      (tbStatus === 'HIGH' && (wq.turbidity ?? 0) > 80) ||
+      (tStatus === 'HIGH' && (wq.temperature ?? 0) > 34)
+    ) {
+      overall = 'CRITICAL';
+    } else if (pStatus !== 'NORMAL' || tbStatus !== 'NORMAL' || tStatus !== 'NORMAL') {
+      overall = 'WARNING';
+    } else {
+      overall = 'NORMAL';
+    }
+  }
+
+  return {
+    temperature: tStatus,
+    ph: pStatus,
+    turbidity: tbStatus,
+    airTemperature: airTempStatus,
+    humidity: humStatus,
+    overall,
+    buzzer: Boolean(Number(parsed.buzzer)) || overall === 'CRITICAL',
+    pump1: wq.pump1,
+    pump2: wq.pump2
+  };
+}
+
 function handleTelemetry(parsed: any, rawLine: string): SerialTelemetryData {
   const waterTemp = parsed.waterTemp !== undefined ? parsed.waterTemp : parsed.temperature;
   const ph = parsed.ph !== undefined ? parsed.ph : null;
@@ -25,27 +94,21 @@ function handleTelemetry(parsed: any, rawLine: string): SerialTelemetryData {
   const p1 = parsed.pump1 !== undefined ? Boolean(Number(parsed.pump1)) : Boolean(Number(parsed.p1));
   const p2 = parsed.pump2 !== undefined ? Boolean(Number(parsed.pump2)) : Boolean(Number(parsed.p2));
 
+  const wq: WaterQuality = {
+    temperature: waterTemp !== undefined && waterTemp !== null ? Number(waterTemp) : null,
+    ph: ph !== undefined && ph !== null ? Number(ph) : null,
+    turbidity: turbidity !== undefined && turbidity !== null ? Number(turbidity) : null,
+    airTemperature: airTemp !== undefined && airTemp !== null ? Number(airTemp) : null,
+    humidity: humidity !== undefined && humidity !== null ? Number(humidity) : null,
+    pump1: p1,
+    pump2: p2
+  };
+
+  const status = computeFallbackStatus(wq, parsed);
+
   return {
-    waterQuality: {
-      temperature: waterTemp !== undefined && waterTemp !== null ? Number(waterTemp) : null,
-      ph: ph !== undefined && ph !== null ? Number(ph) : null,
-      turbidity: turbidity !== undefined && turbidity !== null ? Number(turbidity) : null,
-      airTemperature: airTemp !== undefined && airTemp !== null ? Number(airTemp) : null,
-      humidity: humidity !== undefined && humidity !== null ? Number(humidity) : null,
-      pump1: p1,
-      pump2: p2
-    },
-    status: {
-      temperature: parsed.temperatureStatus || 'NORMAL',
-      ph: parsed.phStatus || 'NORMAL',
-      turbidity: parsed.turbidityStatus || 'NORMAL',
-      airTemperature: parsed.airTemperatureStatus || 'NORMAL',
-      humidity: parsed.humidityStatus || 'NORMAL',
-      overall: parsed.overallStatus || parsed.status || 'NORMAL',
-      buzzer: Boolean(Number(parsed.buzzer)),
-      pump1: p1,
-      pump2: p2
-    },
+    waterQuality: wq,
+    status,
     rawJson: rawLine
   };
 }
@@ -124,21 +187,36 @@ export async function requestAndConnectSerial(
 }
 
 /**
- * Sends a command to Arduino over Serial / HC-05 (e.g. "P1_ON\n")
+ * Sends a command to Arduino over Serial / HC-05 (e.g. "P1_ON\r\n")
  */
 export async function sendSerialCommand(cmd: string): Promise<boolean> {
   if (!activePort || !activePort.writable) {
-    console.warn('[Serial] Cannot send: port not writable');
+    console.warn('[Serial] Cannot send: port not writable or not connected');
     return false;
   }
   try {
     const encoder = new TextEncoder();
-    writer = activePort.writable.getWriter();
-    const payload = encoder.encode(cmd.endsWith('\n') ? cmd : cmd + '\n');
-    await writer.write(payload);
-    writer.releaseLock();
-    writer = null;
-    console.log('[Serial Sent Command]:', cmd);
+    // Normalize command with \r\n for robust parsing across serial links
+    const cleanCmd = cmd.trim();
+    const payload = encoder.encode(cleanCmd + '\r\n');
+
+    let w = writer;
+    let localWriter = false;
+    if (!w) {
+      if (activePort.writable.locked) {
+        console.warn('[Serial] Port writable is temporarily locked, retrying in 50ms...');
+        await new Promise(r => setTimeout(r, 50));
+      }
+      w = activePort.writable.getWriter();
+      localWriter = true;
+    }
+
+    await w.write(payload);
+
+    if (localWriter) {
+      w.releaseLock();
+    }
+    console.log('[Serial Sent Command Successful]:', cleanCmd);
     return true;
   } catch (err) {
     console.error('[Serial Send Error]', err);
