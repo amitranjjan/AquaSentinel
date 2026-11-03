@@ -167,3 +167,4 @@ export async function disconnectSerial(): Promise<void> {
   }
   buffer = '';
 }
+

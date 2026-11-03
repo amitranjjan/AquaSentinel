@@ -1,22 +1,27 @@
 /*
  * AquaSentinel — Arduino Uno Aquaculture Telemetry & Automation Controller
  * 
- * Hardware Config:
+ * Hardware Setup:
  *  - Microcontroller: Arduino Uno (ATmega328P, 5V Logic)
  *  - Air Temp & Humidity: DHT11 Sensor (Digital Pin 5)
  *  - Water Temperature: DS18B20 Waterproof Probe (Digital Pin 4, 1-Wire + 4.7k pull-up)
  *  - Analog pH Sensor: Glass Probe + Signal Board (Analog Pin A0)
  *  - Analog Turbidity Sensor: Optical Sensor Board (Analog Pin A1)
- *  - Bluetooth Module: HM-10 (or AT-09/CC2541/BT05) BLE 4.0 Module (SoftwareSerial Pins 2 & 3)
+ *  - Bluetooth Module: HC-05 (or HM-10/AT-09) Module (SoftwareSerial Pins 2 & 3)
+ *      * Arduino Pin 2 (RX) <-- Bluetooth TXD
+ *      * Arduino Pin 3 (TX) --> Bluetooth RXD
  *  - 2-Channel Relay Module:
  *      * Relay 1 -> Pump 1 (Aerator / Circulation Pump) on Digital Pin 7
  *      * Relay 2 -> Pump 2 (Freshwater Flushing / Drainage Pump) on Digital Pin 8
  *  - Optional Audio Alert: Active Buzzer on Digital Pin 6
  *
- * Web Bluetooth Communication:
- *  - Connects to AquaSentinel Web Dashboard (Chrome / Edge)
+ * Communication:
+ *  - Works with AquaSentinel Web Dashboard via:
+ *      1. Bluetooth HC-05 (Paired in Windows -> Web Serial COM)
+ *      2. Direct USB Cable (Web Serial COM)
+ *      3. HM-10 / AT-09 (Web Bluetooth BLE)
  *  - Broadcasts structured JSON telemetry every 2 seconds terminated with '\n'
- *  - Receives remote commands: "P1_ON", "P1_OFF", "P2_ON", "P2_OFF", "AUTO_ON", "AUTO_OFF"
+ *  - Accepts remote commands: "P1_ON", "P1_OFF", "P2_ON", "P2_OFF", "AUTO_ON", "AUTO_OFF"
  */
 
 #include <SoftwareSerial.h>
@@ -25,8 +30,8 @@
 #include <DHT.h>
 
 // ================= PIN DEFINITIONS =================
-#define BLE_RX_PIN       2    // Arduino Pin 2 (RX) <-- HM-10 TX
-#define BLE_TX_PIN       3    // Arduino Pin 3 (TX) --> HM-10 RX
+#define BLE_RX_PIN       2    // Arduino Pin 2 (RX) <-- Bluetooth TXD
+#define BLE_TX_PIN       3    // Arduino Pin 3 (TX) --> Bluetooth RXD
 #define DS18B20_PIN      4    // Digital Pin 4 for DS18B20 1-Wire bus
 #define DHT_PIN          5    // Digital Pin 5 for DHT11 data
 #define BUZZER_PIN       6    // Digital Pin 6 for Alert Buzzer
@@ -37,12 +42,12 @@
 #define TURB_ANALOG_PIN  A1   // Analog Pin A1 for Turbidity sensor
 
 // ================= RELAY CONFIGURATION =================
-// Most Arduino 5V relay modules are ACTIVE-LOW (LOW = ON, HIGH = OFF)
+// Most 5V Arduino relay modules are ACTIVE-LOW (LOW = ON, HIGH = OFF)
 #define RELAY_ON   LOW
 #define RELAY_OFF  HIGH
 
 // ================= SENSOR OBJECTS =================
-SoftwareSerial bleSerial(BLE_RX_PIN, BLE_TX_PIN); // RX, TX
+SoftwareSerial bleSerial(BLE_RX_PIN, BLE_TX_PIN); // RX, TX for Bluetooth
 OneWire oneWire(DS18B20_PIN);
 DallasTemperature waterTempSensor(&oneWire);
 DHT dht(DHT_PIN, DHT11);
@@ -67,9 +72,9 @@ bool autoControl = true;  // Automated relay triggers based on water quality
 bool buzzerState = false;
 
 unsigned long lastTelemetryTime = 0;
-const unsigned long TELEMETRY_INTERVAL_MS = 2000; // Stream every 2s
+const unsigned long TELEMETRY_INTERVAL_MS = 2000; // Broadcast every 2s
 
-// Analog sample smoothing
+// Analog sample smoothing (reduces ADC electrical jitter)
 float readAverageAnalog(uint8_t pin, uint8_t samples = 10) {
   long sum = 0;
   for (uint8_t i = 0; i < samples; i++) {
@@ -110,70 +115,86 @@ void setPump2(bool state) {
   digitalWrite(RELAY_PUMP2_PIN, state ? RELAY_ON : RELAY_OFF);
 }
 
+// Process incoming commands from either Bluetooth (HC-05) or USB Serial
+void processCommand(String cmd) {
+  cmd.trim();
+  cmd.toUpperCase();
+  if (cmd.length() == 0) return;
+
+  Serial.print(F("[Command Received]: "));
+  Serial.println(cmd);
+
+  if (cmd == "P1_ON") {
+    setPump1(true);
+    autoControl = false; // Manual override
+  } else if (cmd == "P1_OFF") {
+    setPump1(false);
+    autoControl = false;
+  } else if (cmd == "P2_ON") {
+    setPump2(true);
+    autoControl = false;
+  } else if (cmd == "P2_OFF") {
+    setPump2(false);
+    autoControl = false;
+  } else if (cmd == "AUTO_ON") {
+    autoControl = true;
+  } else if (cmd == "AUTO_OFF") {
+    autoControl = false;
+  }
+}
+
 void setup() {
-  // Pin modes
+  // Configure digital pin modes
   pinMode(RELAY_PUMP1_PIN, OUTPUT);
   pinMode(RELAY_PUMP2_PIN, OUTPUT);
   pinMode(BUZZER_PIN, OUTPUT);
 
-  // Turn relays OFF on startup
+  // Initial relay state (OFF for active-low modules)
   digitalWrite(RELAY_PUMP1_PIN, RELAY_OFF);
   digitalWrite(RELAY_PUMP2_PIN, RELAY_OFF);
   digitalWrite(BUZZER_PIN, LOW);
 
-  // Hardware Serial for Debugging
+  // USB Hardware Serial
   Serial.begin(9600);
+  Serial.setTimeout(80); // Fast non-blocking serial read
   delay(300);
+
   Serial.println(F("\n============================================"));
-  Serial.println(F("AquaSentinel Arduino Uno + BLE Node Booting"));
+  Serial.println(F("AquaSentinel Arduino Uno + Bluetooth Node"));
   Serial.println(F("Hardware: DHT11 + DS18B20 + pH + Turbidity + 2 Relays"));
   Serial.println(F("============================================"));
 
-  // HM-10 Bluetooth Serial (9600 is standard factory default)
+  // Bluetooth Serial (HC-05 default baud rate is 9600)
   bleSerial.begin(9600);
+  bleSerial.setTimeout(80);
 
-  // Sensors initialization
+  // Initialize Sensors
   waterTempSensor.begin();
   waterTempSensor.setResolution(10);
   dht.begin();
 
-  // Startup beep
+  // Startup audio confirmation
   digitalWrite(BUZZER_PIN, HIGH);
   delay(120);
   digitalWrite(BUZZER_PIN, LOW);
 
-  Serial.println(F("[AquaSentinel] Ready and listening for BLE connections."));
+  Serial.println(F("[AquaSentinel] Ready and listening on Bluetooth & USB Serial."));
 }
 
 void loop() {
-  // 1. Process incoming BLE commands from Web App (e.g. "P1_ON", "P1_OFF")
+  // 1. Check for incoming commands from Bluetooth (HC-05)
   if (bleSerial.available()) {
     String cmd = bleSerial.readStringUntil('\n');
-    cmd.trim();
-    cmd.toUpperCase();
-    Serial.print(F("[BLE Command Received]: "));
-    Serial.println(cmd);
-
-    if (cmd == "P1_ON") {
-      setPump1(true);
-      autoControl = false; // Manual override
-    } else if (cmd == "P1_OFF") {
-      setPump1(false);
-      autoControl = false;
-    } else if (cmd == "P2_ON") {
-      setPump2(true);
-      autoControl = false;
-    } else if (cmd == "P2_OFF") {
-      setPump2(false);
-      autoControl = false;
-    } else if (cmd == "AUTO_ON") {
-      autoControl = true;
-    } else if (cmd == "AUTO_OFF") {
-      autoControl = false;
-    }
+    processCommand(cmd);
   }
 
-  // 2. Periodic sensor sampling & BLE broadcast
+  // 2. Check for incoming commands from USB Serial (Direct cable)
+  if (Serial.available()) {
+    String cmd = Serial.readStringUntil('\n');
+    processCommand(cmd);
+  }
+
+  // 3. Periodic sensor sampling & broadcast every 2000ms
   unsigned long now = millis();
   if (now - lastTelemetryTime >= TELEMETRY_INTERVAL_MS) {
     lastTelemetryTime = now;
@@ -181,6 +202,7 @@ void loop() {
     // Read DS18B20 Water Temperature
     waterTempSensor.requestTemperatures();
     float wt = waterTempSensor.getTempCByIndex(0);
+    // Ignore error codes (-127 = disconnected probe, 85 = power-on reset state)
     if (wt > -50.0 && wt < 85.0) {
       waterTemp = wt;
     }
@@ -191,12 +213,12 @@ void loop() {
     if (!isnan(h) && h >= 0 && h <= 100) humidity = h;
     if (!isnan(at) && at >= -20 && at <= 60) airTemp = at;
 
-    // Read Analog pH (A0)
+    // Read Analog pH (Pin A0)
     float a0Raw = readAverageAnalog(PH_ANALOG_PIN, 8);
     float a0Volt = (a0Raw / 1023.0) * 5.0;
     phValue = calculatePH(a0Volt);
 
-    // Read Analog Turbidity (A1)
+    // Read Analog Turbidity (Pin A1)
     float a1Raw = readAverageAnalog(TURB_ANALOG_PIN, 8);
     float a1Volt = (a1Raw / 1023.0) * 5.0;
     turbidityValue = calculateTurbidity(a1Volt);
@@ -234,8 +256,7 @@ void loop() {
     buzzerState = (overallStatus == "DANGER");
     digitalWrite(BUZZER_PIN, buzzerState ? HIGH : LOW);
 
-    // Construct concise JSON line (Arduino Uno has 2KB SRAM, keep string compact)
-    // Both long and short keys are recognized by AquaSentinel dashboard
+    // Construct concise JSON line terminated with '\n'
     String json = "{\"waterTemp\":" + String(waterTemp, 1) +
                   ",\"temperature\":" + String(waterTemp, 1) +
                   ",\"airTemp\":" + String(airTemp, 1) +
@@ -247,12 +268,10 @@ void loop() {
                   ",\"overallStatus\":\"" + overallStatus + "\"" +
                   ",\"buzzer\":" + (buzzerState ? "1" : "0") + "}\n";
 
-    // Broadcast over Bluetooth
+    // 1. Broadcast over Bluetooth (HC-05)
     bleSerial.print(json);
 
-    // Mirror to USB Serial Monitor for farmer debugging
-    Serial.print(F("[TELEMETRY] "));
+    // 2. Broadcast over USB Serial (Direct cable / Serial Monitor)
     Serial.print(json);
   }
 }
-
