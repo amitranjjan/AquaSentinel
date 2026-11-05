@@ -24,57 +24,42 @@ export const SensorCard: React.FC<SensorCardProps> = ({
       case 'temperature':
         return {
           title: 'Water Temperature',
-          icon: <Thermometer className="w-5 h-5 text-amber-400" />,
-          accentBg: 'from-amber-500/10 to-orange-500/5',
-          borderColor: 'border-amber-500/20',
+          icon: <Thermometer className="w-5 h-5 text-amber-500" />,
+          iconBg: 'bg-amber-50',
           min: 15,
           max: 40,
-          optimalMin: 26,
-          optimalMax: 32,
         };
       case 'airTemperature':
         return {
           title: 'Air Temperature (DHT11)',
-          icon: <CloudSun className="w-5 h-5 text-yellow-400" />,
-          accentBg: 'from-yellow-500/10 to-amber-500/5',
-          borderColor: 'border-yellow-500/20',
+          icon: <CloudSun className="w-5 h-5 text-amber-500" />,
+          iconBg: 'bg-amber-50',
           min: 10,
           max: 50,
-          optimalMin: 20,
-          optimalMax: 35,
         };
       case 'humidity':
         return {
           title: 'Air Humidity (DHT11)',
-          icon: <Gauge className="w-5 h-5 text-indigo-400" />,
-          accentBg: 'from-indigo-500/10 to-blue-500/5',
-          borderColor: 'border-indigo-500/20',
+          icon: <Gauge className="w-5 h-5 text-sky-500" />,
+          iconBg: 'bg-sky-50',
           min: 10,
           max: 100,
-          optimalMin: 40,
-          optimalMax: 80,
         };
       case 'ph':
         return {
           title: 'pH Level',
-          icon: <Activity className="w-5 h-5 text-emerald-400" />,
-          accentBg: 'from-emerald-500/10 to-teal-500/5',
-          borderColor: 'border-emerald-500/20',
+          icon: <Activity className="w-5 h-5 text-cyan-500" />,
+          iconBg: 'bg-cyan-50',
           min: 4,
           max: 11,
-          optimalMin: 6.5,
-          optimalMax: 8.5,
         };
       case 'turbidity':
         return {
           title: 'Turbidity (Clarity)',
-          icon: <Droplet className="w-5 h-5 text-cyan-400" />,
-          accentBg: 'from-cyan-500/10 to-blue-500/5',
-          borderColor: 'border-cyan-500/20',
+          icon: <Droplet className="w-5 h-5 text-sky-500" />,
+          iconBg: 'bg-sky-50',
           min: 0,
           max: 150,
-          optimalMin: 0,
-          optimalMax: 50,
         };
     }
   };
@@ -86,36 +71,36 @@ export const SensorCard: React.FC<SensorCardProps> = ({
     switch (status) {
       case 'NORMAL':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950/70 border border-emerald-500/40 text-emerald-300">
-            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
             NORMAL
           </span>
         );
       case 'LOW':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-950/80 border border-blue-500/40 text-blue-300">
-            <AlertCircle className="w-3 h-3 text-blue-400" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
+            <AlertCircle className="w-3 h-3 text-sky-600" />
             LOW
           </span>
         );
       case 'HIGH':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-950/80 border border-amber-500/40 text-amber-300">
-            <AlertCircle className="w-3 h-3 text-amber-400" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+            <AlertCircle className="w-3 h-3 text-amber-600" />
             HIGH
           </span>
         );
       case 'SENSOR_ERROR':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-950/90 border border-red-500/50 text-red-300 animate-pulse">
-            <AlertCircle className="w-3 h-3 text-red-400" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 animate-pulse">
+            <AlertCircle className="w-3 h-3 text-rose-600" />
             SENSOR ERROR
           </span>
         );
       case 'DISCONNECTED':
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800/90 border border-slate-700 text-slate-400">
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">
             DISCONNECTED
           </span>
         );
@@ -129,63 +114,71 @@ export const SensorCard: React.FC<SensorCardProps> = ({
     return Math.round(((clamped - meta.min) / (meta.max - meta.min)) * 100);
   };
 
+  // Progress bar fill color based on status
+  const getBarColor = () => {
+    switch (status) {
+      case 'HIGH':
+        return 'bg-amber-500';
+      case 'LOW':
+        return 'bg-sky-500';
+      case 'NORMAL':
+        return 'bg-emerald-500';
+      case 'SENSOR_ERROR':
+        return 'bg-rose-500';
+      default:
+        return 'bg-slate-300';
+    }
+  };
+
+  const percentage = computePercentage();
+
   return (
-    <div className={`relative overflow-hidden rounded-2xl border ${meta.borderColor} bg-gradient-to-b ${meta.accentBg} bg-slate-900/90 p-5 shadow-xl transition-all duration-300 hover:border-slate-600`}>
+    <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
       {/* Top Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className="p-2 rounded-lg bg-slate-800/80 border border-slate-700/50">
-            {meta.icon}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className={`p-2 rounded-xl ${meta.iconBg} flex items-center justify-center`}>
+              {meta.icon}
+            </div>
+            <span className="text-xs sm:text-sm font-bold text-slate-800">{meta.title}</span>
           </div>
-          <span className="text-sm font-semibold text-slate-300">{meta.title}</span>
+          <div>{getStatusBadge()}</div>
         </div>
-        {getStatusBadge()}
-      </div>
 
-      {/* Numerical Reading */}
-      <div className="my-3 flex items-baseline gap-2">
-        {status === 'DISCONNECTED' ? (
-          <div className="text-3xl font-extrabold text-slate-600 tracking-tight flex items-baseline gap-2 font-mono">
-            <span>--</span>
-            <span className="text-xs font-normal text-slate-500 font-sans">(Awaiting BLE)</span>
-          </div>
-        ) : value === null || status === 'SENSOR_ERROR' ? (
-          <div className="text-2xl font-bold text-red-400 tracking-tight flex items-center gap-1.5">
-            <span>Unavailable</span>
-            <span className="text-xs font-normal text-slate-400">(Check probe)</span>
-          </div>
-        ) : (
-          <>
-            <span className="text-4xl font-extrabold tracking-tight text-white font-mono">
-              {value.toFixed(type === 'ph' ? 2 : 1)}
+        {/* Big Reading Value */}
+        <div className="my-2.5 flex items-baseline">
+          {value !== null && !isNaN(value) ? (
+            <>
+              <span className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+                {type === 'ph' ? value.toFixed(2) : type === 'humidity' ? Math.round(value) : value.toFixed(1)}
+              </span>
+              {unit && (
+                <span className="text-xs sm:text-sm font-semibold text-slate-500 ml-1.5">
+                  {unit}
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="text-base font-semibold text-slate-400 py-2">
+              (Awaiting Telemetry)
             </span>
-            <span className="text-sm font-semibold text-slate-400">{unit}</span>
-          </>
-        )}
-      </div>
-
-      {/* Visual meter bar */}
-      <div className="mt-4 mb-2">
-        <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden relative">
-          {value !== null && status !== 'SENSOR_ERROR' && (
-            <div
-              className={`h-full transition-all duration-500 rounded-full ${
-                status === 'NORMAL'
-                  ? 'bg-emerald-400'
-                  : status === 'LOW'
-                  ? 'bg-blue-400'
-                  : 'bg-amber-400'
-              }`}
-              style={{ width: `${computePercentage()}%` }}
-            />
           )}
         </div>
+
+        {/* Visual Range Progress Bar */}
+        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden my-3">
+          <div
+            className={`h-full ${getBarColor()} transition-all duration-500 rounded-full`}
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
       </div>
 
-      {/* Optimal species recommendation footer */}
-      <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-800/60 pt-2">
-        <span>Target for {speciesName}:</span>
-        <span className="font-semibold text-slate-200">{targetRange}</span>
+      {/* Target Range Footer */}
+      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+        <span className="text-slate-400 font-medium">Target for {speciesName}:</span>
+        <span className="font-bold text-slate-700">{targetRange}</span>
       </div>
     </div>
   );

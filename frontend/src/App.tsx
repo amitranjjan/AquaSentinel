@@ -476,7 +476,7 @@ export const App: React.FC = () => {
   const isHardwareConnected = connectionMode === 'ble' || connectionMode === 'serial';
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#f0f4f9] text-slate-800 flex flex-col font-sans">
       {/* 1. Header */}
       <Header
         connectionMode={connectionMode}
@@ -526,19 +526,19 @@ export const App: React.FC = () => {
 
         {/* Diagnostic Helper Banner for Serial / HC-05 */}
         {connectionMode === 'serial' && sensorStatus.overall === 'DISCONNECTED' && (
-          <div className="p-4 rounded-2xl bg-cyan-950/40 border border-cyan-500/40 text-xs text-slate-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-pulse">
+          <div className="p-4 rounded-2xl bg-sky-50 border border-sky-200 text-xs text-sky-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs animate-pulse">
             <div>
-              <p className="font-bold text-cyan-300 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+              <p className="font-bold text-sky-700 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-sky-500 animate-ping" />
                 Serial Port Connected &mdash; Awaiting First Telemetry Packet
               </p>
-              <p className="text-slate-400 text-[11px] mt-0.5">
+              <p className="text-slate-600 text-[11px] mt-0.5">
                 Windows creates 2 Bluetooth ports for HC-05 (<strong>Outgoing</strong> and <strong>Incoming</strong>). If no readings appear within 5 seconds, click <strong>Disconnect</strong> and select the other COM port from the prompt.
               </p>
             </div>
             <button
               onClick={handleDisconnect}
-              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold shrink-0 text-[11px]"
+              className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-semibold shrink-0 text-[11px] shadow-xs"
             >
               Switch COM Port
             </button>
@@ -629,16 +629,16 @@ export const App: React.FC = () => {
         />
 
         {/* Hardware & Connect Quick Tip */}
-        <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 text-xs text-slate-400 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="p-4 rounded-2xl bg-white border border-slate-200/90 text-xs text-slate-600 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-2.5">
-            <Terminal className="w-4 h-4 text-cyan-400 shrink-0" />
+            <Terminal className="w-4 h-4 text-sky-600 shrink-0" />
             <span>
-              Supports <strong>HC-05 (via Web Serial COM)</strong>, <strong>HM-10 (BLE)</strong>, and <strong>Direct USB</strong>. Firmware in <code className="font-mono text-cyan-300">firmware/AquaSentinel_ArduinoUno/</code>.
+              Supports <strong>HC-05 (via Web Serial COM)</strong>, <strong>HM-10 (BLE)</strong>, and <strong>Direct USB</strong>. Firmware in <code className="font-mono text-sky-700 bg-sky-50 px-1 py-0.5 rounded">firmware/AquaSentinel_ArduinoUno/</code>.
             </span>
           </div>
           <button
             onClick={() => setIsSimulatorOpen(true)}
-            className="text-cyan-400 hover:text-cyan-300 underline font-medium self-start sm:self-center"
+            className="text-sky-600 hover:text-sky-700 underline font-semibold self-start sm:self-center"
           >
             Configure Test Scenarios
           </button>
@@ -671,7 +671,7 @@ export const App: React.FC = () => {
       />
 
       {/* Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950 py-4 px-6 text-center text-xs text-slate-600">
+      <footer className="border-t border-slate-200/80 bg-white py-4 px-6 text-center text-xs text-slate-500">
         AquaSentinel • IoT Water Quality & Gemini AI Decision Support for Fish Farming • Owner: Amit Ranjan
       </footer>
     </div>

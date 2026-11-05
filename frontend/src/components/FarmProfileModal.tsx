@@ -63,16 +63,16 @@ export const FarmProfileModal: React.FC<FarmProfileModalProps> = ({
   const selectedSpeciesMeta = FISH_SPECIES_OPTIONS.find(s => s.species === formData.fishSpecies);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl max-w-xl w-full overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl max-w-xl w-full overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/80">
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-white">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+            <div className="p-2.5 rounded-xl bg-sky-50 text-sky-600 border border-sky-200">
               <Fish className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white">Farm & Pond Configuration</h3>
+              <h3 className="text-base font-bold text-slate-900">Farm &amp; Pond Configuration</h3>
               <p className="text-xs text-slate-400">
                 Grounds Gemini recommendations in your specific species and pond setup
               </p>
@@ -80,19 +80,19 @@ export const FarmProfileModal: React.FC<FarmProfileModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-5 flex-1">
+        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
           {/* Farm Name & Pond Name */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5 text-cyan-400" />
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-sky-600" />
                 Farm Name
               </label>
               <input
@@ -100,13 +100,13 @@ export const FarmProfileModal: React.FC<FarmProfileModalProps> = ({
                 value={formData.farmName}
                 onChange={(e) => setFormData({ ...formData, farmName: e.target.value })}
                 placeholder="e.g. Green Valley Aquaculture"
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:bg-white transition-colors"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-cyan-400" />
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-sky-600" />
                 Pond / Enclosure Name
               </label>
               <input
@@ -114,15 +114,15 @@ export const FarmProfileModal: React.FC<FarmProfileModalProps> = ({
                 value={formData.pondName}
                 onChange={(e) => setFormData({ ...formData, pondName: e.target.value })}
                 placeholder="e.g. Nursery Pond A"
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:bg-white transition-colors"
               />
             </div>
           </div>
 
-          {/* Fish Species Selection (PRD Section 8) */}
+          {/* Fish Species Selection */}
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5">
-              <Fish className="w-3.5 h-3.5 text-cyan-400" />
+            <label className="block text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
+              <Fish className="w-3.5 h-3.5 text-sky-600" />
               Target Fish Species
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
@@ -133,14 +133,14 @@ export const FarmProfileModal: React.FC<FarmProfileModalProps> = ({
                   onClick={() => setFormData({ ...formData, fishSpecies: item.species })}
                   className={`p-3 rounded-xl border text-left text-xs font-semibold transition-all ${
                     formData.fishSpecies === item.species
-                      ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 shadow-sm shadow-cyan-500/20'
-                      : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                      ? 'bg-sky-50 border-sky-400 text-sky-800 shadow-xs'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <span>{item.species}</span>
                     {formData.fishSpecies === item.species && (
-                      <Check className="w-3.5 h-3.5 text-cyan-400" />
+                      <Check className="w-3.5 h-3.5 text-sky-600" />
                     )}
                   </div>
                 </button>
@@ -149,11 +149,11 @@ export const FarmProfileModal: React.FC<FarmProfileModalProps> = ({
 
             {/* Selected species optimal note */}
             {selectedSpeciesMeta && (
-              <div className="mt-2.5 p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-xs space-y-1">
-                <div className="text-cyan-400 font-mono font-semibold">
+              <div className="mt-2.5 p-3 rounded-xl bg-sky-50/70 border border-sky-200 text-xs space-y-1">
+                <div className="text-sky-800 font-mono font-bold">
                   {selectedSpeciesMeta.optimal}
                 </div>
-                <p className="text-slate-400 text-[11px]">
+                <p className="text-slate-600 text-[11px]">
                   {selectedSpeciesMeta.info}
                 </p>
               </div>
@@ -162,7 +162,7 @@ export const FarmProfileModal: React.FC<FarmProfileModalProps> = ({
 
           {/* Culture Type */}
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-2">
+            <label className="block text-xs font-semibold text-slate-700 mb-2">
               Aquaculture System / Culture Type
             </label>
             <div className="flex flex-wrap gap-2">
@@ -171,10 +171,10 @@ export const FarmProfileModal: React.FC<FarmProfileModalProps> = ({
                   type="button"
                   key={type}
                   onClick={() => setFormData({ ...formData, cultureType: type })}
-                  className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
                     formData.cultureType === type
-                      ? 'bg-blue-600 border-blue-500 text-white'
-                      : 'bg-slate-950/80 border-slate-800 text-slate-400 hover:text-white'
+                      ? 'bg-sky-500 border-sky-500 text-white shadow-xs'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                 >
                   {type}
@@ -186,7 +186,7 @@ export const FarmProfileModal: React.FC<FarmProfileModalProps> = ({
           {/* Pond Size, Fish Age, Stock Count */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
                 Pond Area
               </label>
               <input
@@ -194,13 +194,13 @@ export const FarmProfileModal: React.FC<FarmProfileModalProps> = ({
                 value={formData.pondSize}
                 onChange={(e) => setFormData({ ...formData, pondSize: e.target.value })}
                 placeholder="e.g. 1000 m2"
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:bg-white"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
-                <Calendar className="w-3 h-3 text-cyan-400" />
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-sky-600" />
                 Fish Age
               </label>
               <input
@@ -208,13 +208,13 @@ export const FarmProfileModal: React.FC<FarmProfileModalProps> = ({
                 value={formData.fishAge}
                 onChange={(e) => setFormData({ ...formData, fishAge: e.target.value })}
                 placeholder="e.g. 3 months"
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:bg-white"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
-                <Users className="w-3 h-3 text-cyan-400" />
+              <label className="block text-[11px] font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                <Users className="w-3 h-3 text-sky-600" />
                 Approx. Stock
               </label>
               <input
@@ -222,31 +222,31 @@ export const FarmProfileModal: React.FC<FarmProfileModalProps> = ({
                 value={formData.approxStock}
                 onChange={(e) => setFormData({ ...formData, approxStock: e.target.value })}
                 placeholder="e.g. 5000 fingerlings"
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:bg-white"
               />
             </div>
           </div>
 
           {/* Info Banner */}
-          <div className="p-3 rounded-xl bg-cyan-950/40 border border-cyan-800/40 text-[11px] text-cyan-300 flex items-start gap-2">
-            <Info className="w-4 h-4 shrink-0 text-cyan-400 mt-0.5" />
+          <div className="p-3 rounded-xl bg-sky-50 border border-sky-200 text-[11px] text-sky-900 flex items-start gap-2">
+            <Info className="w-4 h-4 shrink-0 text-sky-600 mt-0.5" />
             <span>
               Updating these parameters will instantly recalibrate target ranges and guide Gemini's contextual evaluations.
             </span>
           </div>
 
           {/* Footer Buttons */}
-          <div className="pt-4 border-t border-slate-800 flex justify-end gap-2.5">
+          <div className="pt-4 border-t border-slate-100 flex justify-end gap-2.5">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+              className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold shadow-xs transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold shadow-lg shadow-cyan-600/20 flex items-center gap-1.5 transition-all"
+              className="px-5 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold shadow-sm shadow-sky-500/20 flex items-center gap-1.5 transition-all"
             >
               <Save className="w-4 h-4" />
               <span>Save Farm Profile</span>
